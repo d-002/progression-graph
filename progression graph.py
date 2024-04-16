@@ -9,7 +9,82 @@ class Palette:
     """Static class, used to store colors data"""
     text = (255, 255, 255)
     background = (50, 50, 50)
+    neutral = (80, 80, 80)
     red = (255, 0, 0)
+
+def ask_input_box(message, cast, max_width=400, forbidden='', allow_empty=False):
+    """Input box, freezes other actions to ask for user value.
+Param cast: function used to check for input format
+Param forbidden: don't allow these characters"""
+
+    # make a darkened background from the current screen state
+    dark = pygame.Surface((Graph.W, Graph.H), SRCALPHA)
+    dark.fill((0, 0, 0, 127))
+    background = pygame.Surface((Graph.W, Graph.H))
+    background.blit(screen, (0, 0))
+    background.blit(dark, (0, 0))
+    
+    # make box for the UI
+    pygame.draw.rect(background, Palette.background, Rect((Graph.W*0.2, Graph.H*0.2, Graph.W*0.6, Graph.H*0.6)))
+    text = font.render(message, True, Palette.text)
+    background.blit(text, (Graph.W/2 - text.get_width()/2, Graph.H*0.3))
+
+    # init error text
+    error_text = [font.render('Error: incorrect value', True, Palette.red),
+                  font.render(' Error: text too long', True, Palette.red),
+                  font.render("Error: can't be empty", True, Palette.red)]
+    error_pos = (Graph.W/2 - error_text[0].get_width()/2, Graph.H*0.3 + 20)
+
+    # get the "_" character width, useful later on
+    blink_w = font.render('_', True, Palette.text).get_width()
+
+    # loop until the user presses Enter
+    string = ''
+    run = True
+    while run:
+        enter = False # for when to try to get out of the loop
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                return # returning None should trigger a quit externally
+            elif event.type == KEYDOWN:
+                if event.key == K_BACKSPACE: string = string[:-1]
+                elif event.key == K_RETURN or event.key == K_KP_ENTER:
+                    enter = True
+                elif event.unicode not in forbidden:
+                    string += event.unicode
+
+        # add blinking cursor for displayed text
+        blink = ticks()%1000 < 600
+        text = font.render(string + ('_' if blink else ''), True, Palette.text)
+
+        # handle incorrect value
+        error = 0
+        try: cast(string)
+        except: error = 1
+        if text.get_width() > max_width:
+            error = 2
+            # trim the displayed text
+            temp = text
+            text = pygame.Surface((max_width, 16), SRCALPHA)
+            text.blit(temp, (0, 0))
+        if enter and not error:
+            if not string and not allow_empty: error = 3
+            else: run = False
+
+        screen.blit(background, (0, 0))
+        if error: screen.blit(error_text[error-1], error_pos)
+
+        # draw actual textbox
+        w = max(text.get_width() + (0 if blink else blink_w), 200) # minimum input size
+        x = Graph.W/2 - w/2
+        y = Graph.H/2 - 8
+        pygame.draw.rect(screen, Palette.neutral, Rect((x-4, y-4), (w+8, 24)))
+        screen.blit(text, (x, y))
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
+    return cast(string)
 
 class Manager:
     """Manager for all objects. Should be used to create and remove new objects, as it manages the ID system."""
@@ -264,14 +339,19 @@ graph.open('test_save.txt')
 graph.save()
 
 dt = 0 # time passed in last frame, in seconds
-while True:
+run = True
+while run:
     # handle pygame event loop
     events = pygame.event.get()
     for event in events:
-        if event.type == QUIT:
-            pygame.quit()
-            quit()
+        if event.type == QUIT: run = False
+        elif event.type == KEYDOWN:
+            if event.key == K_p:
+                print(ask_input_box('Test message box', int))
 
     graph.update(events)
     pygame.display.flip()
     dt = clock.tick(FPS)/1000
+
+pygame.quit()
+quit()

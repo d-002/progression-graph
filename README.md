@@ -27,5 +27,8 @@ Progression tree tool for games
 - IDs manager
 
 ## Optional TODO:
+- Save files, in zip?
 - Image file search box, use already existing image
 - png transparent background option
+- point as block, specify size with rank system?
+- hold shift to only edit X or Y coordinate

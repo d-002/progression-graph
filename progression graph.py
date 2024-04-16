@@ -9,6 +9,7 @@ class Palette:
     """Static class, used to store colors data"""
     text = (255, 255, 255)
     background = (50, 50, 50)
+    red = (255, 0, 0)
 
 class Manager:
     """Manager for all objects. Should be used to create and remove new objects, as it manages the ID system."""
@@ -72,6 +73,10 @@ class Point:
     def remove_image(self):
         self.image = -1
 
+    def update(self, events):
+        x, y = graph.get_pos(self.x, self.y)
+        pygame.draw.rect(screen, Palette.text, Rect((x-3, y-3), (6, 6)))
+
 class Link:
     """Link between two points in the graph"""
     def __init__(self, p1, p2, id):
@@ -83,6 +88,9 @@ class Link:
         # linked points IDs
         self.p1 = p1
         self.p2 = p2
+
+    def update(self, events):
+        pass
 
 class Image:
     """Pygame surface loaded from image file"""
@@ -96,8 +104,17 @@ class Graph:
     H = 500
 
     def __init__(self):
+        self.scroll_x = 0
+        self.scroll_y = 0
+        self.zoom = 1
+        self.unit_size = 100 # graph unit to pixel ratio
+
         self.save_file = None
         self.objects = []
+
+        # movement utilities
+        self.scroll_start = None
+        self.drag_start = None
 
     def open(self, save_file):
         """Sets self.save_file and load save file"""
@@ -178,17 +195,66 @@ class Graph:
         # save into file
         with open(self.save_file, 'w') as f: f.write('\n'.join(content))
 
+    def get_pos(self, x, y):
+        """Returns the position, in screen coordinates, corresponding to a position in graph coordinates"""
+        z = self.zoom * self.unit_size
+        return (x - self.scroll_x) * z + self.W/2, (y - self.scroll_y) * z + self.H/2
+
+    def visible(self, x, y):
+        """Returns true if point is visible (taking scroll and zoom into account), else false"""
+        x, y = self.get_pos(x, y)
+        return 0 <= x < self.W and 0 <= y < self.H
+
     def update(self, events):
         """Updates objects and menu, displays the graph"""
+        # move and zoom
+        pressed = pygame.mouse.get_pressed()[0]
+
+        for event in events:
+            if event.type == MOUSEBUTTONDOWN and event.button == 1:
+                self.scroll_start = (self.scroll_x, self.scroll_y) # start dragging
+                self.drag_start = event.pos
+            elif event.type == MOUSEBUTTONUP and event.button == 1:
+                self.scroll_start = None # stop dragging
+                self.drag_start = None
+
+            # zoom
+            elif event.type == MOUSEWHEEL and not pressed:
+                if event.y > 0: self.zoom *= 1.2 # zoom in
+                elif self.zoom > 0.1: self.zoom /= 1.2 # zoom out
+                else: self.zoom = 0.1 # min zoom
+
+        if self.drag_start is not None and pressed:
+            x, y = self.scroll_start # scroll pos when drag started
+            x0, y0 = self.drag_start # mouse pos when drag started
+            x1, y1 = pygame.mouse.get_pos()
+            m = 1/self.zoom/self.unit_size
+            self.scroll_x = x + (x0-x1)*m
+            self.scroll_y = y + (y0-y1)*m
+
         # update and render menu and UI
         screen.fill(Palette.background)
 
         # update and render graph objects
+        visible_p = [] # points
+        for id, point in Manager.points.items():
+            if self.visible(point.x, point.y):
+                visible_p.append(id)
+        visible_l = [] # links
+        for id, link in Manager.links.items():
+            if link.p1 in visible_p or link.p2 in visible_p:
+                visible_l.append(id)
+
+        for link in visible_l:
+            Manager.links[link].update(events)
+        for point in visible_p:
+            Manager.points[point].update(events)
 
 FPS = 60
 pygame.init()
 
 screen = pygame.display.set_mode((Graph.W, Graph.H))
+pygame.display.set_caption('Progression graph')
 font = pygame.font.SysFont('consolas', 16)
 clock = pygame.time.Clock()
 ticks = pygame.time.get_ticks
@@ -197,6 +263,7 @@ graph = Graph()
 graph.open('test_save.txt')
 graph.save()
 
+dt = 0 # time passed in last frame, in seconds
 while True:
     # handle pygame event loop
     events = pygame.event.get()
@@ -207,4 +274,4 @@ while True:
 
     graph.update(events)
     pygame.display.flip()
-    clock.tick(FPS)
+    dt = clock.tick(FPS)/1000

@@ -1,5 +1,5 @@
-# progression-tree
-Progression tree tool for games
+# progression-graph
+Progression graph tool for games
 
 ## Screenshots
 *[upcoming]*
@@ -26,11 +26,13 @@ Progression tree tool for games
 - Core mechanics described above
 - Handle objects deletion and IDs
 - Handle deletion of old objects in open_file
+- Movement and zoom
 
 ## Optional TODO:
-- Movement and zoom
 - Save files, in zip?
 - Image file search box, use already existing image
 - png transparent background option
 - point as block, specify size with rank system?
 - hold shift to only edit X or Y coordinate
+- Scroll position and zoom in save file?
+- Be more generous for displaying visible objects

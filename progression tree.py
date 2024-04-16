@@ -21,11 +21,11 @@ class Manager:
 
     @staticmethod
     def new_point(x, y, id=None):
-        Manager.new_obj((x, y), Point, Manager.points, id)
+        Manager.new_obj((float(x), float(y)), Point, Manager.points, id)
 
     @staticmethod
     def new_link(x, y, id=None):
-        Manager.new_obj((x, y), Link, Manager.links, id)
+        Manager.new_obj((float(x), float(y)), Link, Manager.links, id)
 
     @staticmethod
     def new_image(name, id=None):
@@ -38,20 +38,32 @@ class Point:
         self.y = y
         self.id = id
 
-        self.text = None # rendered pygame font, None for no text
+        self.text = ''
+        self.text_surf = None # rendered pygame font, None for no text
         self.image = -1 # image id, -1 for no image
+
+    def set_text(self, text):
+        """Sets the point's text and update its text Surface"""
+        self.text = text
+        self.text_surf = None if not text else font.render(text, True, Palette.text)
+
+    def set_image(self, image):
+        self.image = int(image)
+
+    def remove_image(self):
+        self.image = -1
 
 class Link:
     """Link between two points in the graph"""
-    def __init__(self, x, y, id):
+    def __init__(self, p1, p2, id):
         self.x = x
         self.y = y
         self.id = id
         self.strength = 5
 
-        # linked points
-        self.a = None
-        self.b = None
+        # linked points IDs
+        self.p1 = p1
+        self.p2 = p2
 
 class Image:
     """Pygame surface loaded from image file"""
@@ -65,11 +77,77 @@ class Graph:
     H = 500
 
     def __init__(self):
-        if not pygame.get_init(): raise Exception('Pygame not initialized')
+        self.save_file = None
+        self.objects = []
 
-        self.screen = pygame.display.set_mode((self.W, self.H))
-        self.clock = pygame.time.Clock()
-        self.ticks = pygame.time.get_ticks
+    def open(self, save_file):
+        """Sets self.save_file and load save file"""
+        self.save_file = save_file
+
+        # TODO: handle deletion of old objects
+
+        with open(save_file) as f: lines = f.read().split('\n')
+        for y, raw in enumerate(lines):
+            # format line: remove leading and trailing spaces, double spaces, comments
+            line = ''
+            prev = ' '
+            for c in raw:
+                if c == prev == ' ': continue
+                if c == '#': break
+                line += c
+                prev = c
+            line = line.rstrip()
+            if not line: continue
+
+            # get command from line
+            line = line.split(' ')
+            cmd = line[0]
+            args = line[1:]
+
+            match cmd:
+                case 'I':
+                    if len(args) != 2: syntax_error(y, raw)
+                    Manager.new_image(*args)
+                case 'P':
+                    if len(args) != 3: syntax_error(y, raw)
+                    Manager.new_point(*args)
+                case _: syntax_error(y, raw)
+
+    def save(self):
+        """Save graph contents into self.save_file"""
+        content = []
+
+        if self.save_file is None: raise ValueError('No save loaded')
+
+        # points
+        content.append('# POINTS')
+        for id, point in Manager.points.items():
+            content.append('P %d %d %d' %(point.x, point.y, id))
+
+        # links
+        content += ('', '# LINKS')
+        for id, link in Manager.links.items():
+            content.append('L %d %d %d' %(Manager.points[link.p1].id, Manager.points[link.p2].id, id))
+
+        # images
+        content += ('', '# IMAGES')
+        for id, image in Manager.images.items():
+            content.append('I %s %d' %(image.name, image.id))
+
+        # images attached to points
+        content += ('', '# LINK IMAGES')
+        for id, point in Manager.points.items():
+            if point.image != -1:
+                content.append('Ai %d %d' %(id, Manager.images[point.image].id))
+
+        # text attached to points
+        content += ('', '# TEXT')
+        for id, point in Manager.points.items():
+            if point.text != '':
+                content.append('At %d %d' %(id, point.text.id))
+
+        # save into file
+        with open(self.save_file, 'w') as f: f.write('\n'.join(content))
 
     def update(self):
         """Handles pygame event loop, updates elements, displays the graph"""
@@ -87,36 +165,18 @@ class Graph:
 def syntax_error(y, expression):
     raise SyntaxError('Could not parse save file at line %d: "%s"' %(y+1, expression))
 
-def open_save(path):
-    global objects
-
-    with open(path) as f: lines = f.read().split('\n')
-    for y, raw in enumerate(lines):
-        # format line: remove leading and trailing spaces, double spaces, comments
-        line = ''
-        prev = ' '
-        for c in raw:
-            if c == prev == ' ': continue
-            if c == '#': break
-            line += c
-            prev = c
-        line = line.rstrip()
-        if not line: continue
-
-        # get command from line
-        line = line.split(' ')
-        cmd = line[0]
-        args = line[1:]
-
-        match cmd:
-            case 'I':
-                if len(args) != 2: syntax_error(y, raw)
-                Manager.new_image(*args)
-            case 'P':
-                if len(args) != 3: syntax_error(y, raw)
-                Manager.new_point(*args)
-            case _: syntax_error(y, raw)
-
+FPS = 60
 pygame.init()
 
-open_save('test_save.txt')
+screen = pygame.display.set_mode((Graph.W, Graph.H))
+font = pygame.font.SysFont('consolas', 16)
+clock = pygame.time.Clock()
+ticks = pygame.time.get_ticks
+
+graph = Graph()
+graph.open('test_save.txt')
+graph.save()
+
+while True:
+    graph.update()
+    clock.tick(FPS)

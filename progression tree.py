@@ -1,6 +1,15 @@
 import pygame
 from pygame.locals import *
 
+def syntax_error(y, expression):
+    """Used to help handling file parsing errors"""
+    raise SyntaxError('Could not parse save file at line %d: "%s"' %(y+1, expression))
+
+class Palette:
+    """Static class, used to store colors data"""
+    text = (255, 255, 255)
+    background = (50, 50, 50)
+
 class Manager:
     """Manager for all objects. Should be used to create and remove new objects, as it manages the ID system."""
 
@@ -31,6 +40,16 @@ class Manager:
     def new_image(name, id=None):
         Manager.new_obj((name,), Image, Manager.images, id)
 
+    @staticmethod
+    def attach_image(point_id, image_id):
+        """Sets the image reference of a point"""
+        points[int(point_id)].set_image(image_id)
+
+    @staticmethod
+    def attach_text(point_id, text):
+        """Sets the text of a point"""
+        points[int(point_id)].set_text(text)
+
 class Point:
     """Point in the graph, can be attached to various links and have text and an image"""
     def __init__(self, x, y, id):
@@ -43,7 +62,7 @@ class Point:
         self.image = -1 # image id, -1 for no image
 
     def set_text(self, text):
-        """Sets the point's text and update its text Surface"""
+        """Sets the point's text and updates its text Surface"""
         self.text = text
         self.text_surf = None if not text else font.render(text, True, Palette.text)
 
@@ -104,13 +123,23 @@ class Graph:
             cmd = line[0]
             args = line[1:]
 
+            # execute action depending on command
             match cmd:
-                case 'I':
-                    if len(args) != 2: syntax_error(y, raw)
-                    Manager.new_image(*args)
-                case 'P':
+                case 'P': # add new point
                     if len(args) != 3: syntax_error(y, raw)
                     Manager.new_point(*args)
+                case 'L': # add new link
+                    if len(args) != 3: syntax_error(y, raw)
+                    Manager.new_link(*args)
+                case 'I': # add new image
+                    if len(args) != 2: syntax_error(y, raw)
+                    Manager.new_image(*args)
+                case 'Ai': # attach an image to a point
+                    if len(args) != 2: syntax_error(y, raw)
+                    Manager.attach_image(*args)
+                case 'At': # attach text to a point
+                    if len(args) != 2: syntax_error(y, raw)
+                    Manager.attach_text(*args)
                 case _: syntax_error(y, raw)
 
     def save(self):
@@ -149,21 +178,12 @@ class Graph:
         # save into file
         with open(self.save_file, 'w') as f: f.write('\n'.join(content))
 
-    def update(self):
-        """Handles pygame event loop, updates elements, displays the graph"""
-        events = pygame.event.get()
-        for event in events:
-            if event.type == QUIT:
-                pygame.quit()
-                quit()
-                return # just in case
+    def update(self, events):
+        """Updates objects and menu, displays the graph"""
+        # update and render menu and UI
+        screen.fill(Palette.background)
 
-        # update visible elements
-
-        # render graph
-
-def syntax_error(y, expression):
-    raise SyntaxError('Could not parse save file at line %d: "%s"' %(y+1, expression))
+        # update and render graph objects
 
 FPS = 60
 pygame.init()
@@ -178,5 +198,13 @@ graph.open('test_save.txt')
 graph.save()
 
 while True:
-    graph.update()
+    # handle pygame event loop
+    events = pygame.event.get()
+    for event in events:
+        if event.type == QUIT:
+            pygame.quit()
+            quit()
+
+    graph.update(events)
+    pygame.display.flip()
     clock.tick(FPS)

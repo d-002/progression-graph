@@ -8,8 +8,8 @@ def syntax_error(y, expression):
 class Palette:
     """Static class, used to store colors data"""
     text = (255, 255, 255)
-    background = (50, 50, 50)
-    neutral = (80, 80, 80)
+    background = (40, 40, 43)
+    neutral = (80, 80, 85)
     red = (255, 0, 0)
 
 def ask_input_box(message, cast, max_width=400, forbidden='', allow_empty=False):
@@ -126,7 +126,14 @@ class Manager:
         """Sets the text of a point"""
         points[int(point_id)].set_text(text)
 
-class Point:
+class GraphObject:
+    def update(self, events):
+        raise NotImplementedError
+
+    def collide(self, pos):
+        raise NotImplementedError
+
+class Point(GraphObject):
     """Point in the graph, can be attached to various links and have text and an image"""
     def __init__(self, x, y, id):
         self.x = x
@@ -148,11 +155,15 @@ class Point:
     def remove_image(self):
         self.image = -1
 
+    def collide(self, pos):
+        x, y = graph.get_pos(self.x, self.y)
+        return x-10 < pos[0] < x+10 and y-10 < pos[1] < y+10
+
     def update(self, events):
         x, y = graph.get_pos(self.x, self.y)
         pygame.draw.rect(screen, Palette.text, Rect((x-3, y-3), (6, 6)))
 
-class Link:
+class Link(GraphObject):
     """Link between two points in the graph"""
     def __init__(self, p1, p2, id):
         self.x = x
@@ -173,6 +184,25 @@ class Image:
         self.name = name
         self.surf = pygame.image.load('images/%s.png' %name)
 
+class UI:
+    """UI elements on top of the screen: help, info about selection"""
+    def __init__(self):
+        self.surf = pygame.Surface((Graph.W, 40), SRCALPHA) # blitted, cached surface
+        self.help_text = font.render('P: new point, S: save file, O: open file, I: load image', True, Palette.text)
+        self.update_surf()
+
+    def update_surf(self):
+        """Updates cached surface: redraw background, add elements depending on selection"""
+        pygame.draw.rect(self.surf, Palette.neutral, Rect((0, 0), (Graph.W, 40)))
+
+        if graph.selection is None:
+            self.surf.blit(self.help_text, (11, 11))
+
+    def update(self):
+        
+        self.surf.set_alpha(100 if pygame.mouse.get_pos()[1] < 40 else 255)
+        screen.blit(self.surf, (0, 0))
+
 class Graph:
     """Graph manager, for displaying the graph, handling scroll, and updating elements"""
     W = 900
@@ -188,8 +218,9 @@ class Graph:
         self.objects = []
 
         # movement utilities
-        self.scroll_start = None
-        self.drag_start = None
+        self.drag_start = None # moved/scroll element pos when drag started
+        self.drag_mouse_start = None # mouse pos when drag started
+        self.selection = None # selected GraphPoint, or None if no selection
 
     def open(self, save_file):
         """Sets self.save_file and load save file"""
@@ -285,32 +316,7 @@ class Graph:
         # move and zoom
         pressed = pygame.mouse.get_pressed()[0]
 
-        for event in events:
-            if event.type == MOUSEBUTTONDOWN and event.button == 1:
-                self.scroll_start = (self.scroll_x, self.scroll_y) # start dragging
-                self.drag_start = event.pos
-            elif event.type == MOUSEBUTTONUP and event.button == 1:
-                self.scroll_start = None # stop dragging
-                self.drag_start = None
-
-            # zoom
-            elif event.type == MOUSEWHEEL and not pressed:
-                if event.y > 0: self.zoom *= 1.2 # zoom in
-                elif self.zoom > 0.1: self.zoom /= 1.2 # zoom out
-                else: self.zoom = 0.1 # min zoom
-
-        if self.drag_start is not None and pressed:
-            x, y = self.scroll_start # scroll pos when drag started
-            x0, y0 = self.drag_start # mouse pos when drag started
-            x1, y1 = pygame.mouse.get_pos()
-            m = 1/self.zoom/self.unit_size
-            self.scroll_x = x + (x0-x1)*m
-            self.scroll_y = y + (y0-y1)*m
-
-        # update and render menu and UI
-        screen.fill(Palette.background)
-
-        # update and render graph objects
+        # get visible graph objects now, useful for collision checks
         visible_p = [] # points
         for id, point in Manager.points.items():
             if self.visible(point.x, point.y):
@@ -320,6 +326,55 @@ class Graph:
             if link.p1 in visible_p or link.p2 in visible_p:
                 visible_l.append(id)
 
+        # events check
+        for event in events:
+            if event.type == MOUSEBUTTONDOWN and event.button == 1:
+                self.selection = None
+                for point in visible_p:
+                    if self.selection is not None: break
+                    point = Manager.points[point]
+                    if point.collide(event.pos): self.selection = point
+                for link in visible_l:
+                    if self.selection is not None: break
+                    link = Manager.points[link]
+                    if point.collide(event.pos): self.selection = link
+
+                # start dragging
+                if self.selection is None:
+                    self.drag_start = (self.scroll_x, self.scroll_y)
+                else:
+                    self.drag_start = (self.selection.x, self.selection.y)
+                self.drag_mouse_start = event.pos
+
+            elif event.type == MOUSEBUTTONUP and event.button == 1:
+                # stop dragging
+                self.drag_start = None
+                self.drag_mouse_start = None
+
+            # zoom
+            elif event.type == MOUSEWHEEL and not pressed:
+                if event.y > 0: self.zoom *= 1.2 # zoom in
+                elif self.zoom > 0.1: self.zoom /= 1.2 # zoom out
+                else: self.zoom = 0.1 # min zoom
+
+        if self.drag_start is not None:
+            x, y = self.drag_start
+            x0, y0 = self.drag_mouse_start
+            x1, y1 = pygame.mouse.get_pos()
+            m = 1/self.zoom/self.unit_size
+            dx = (x0-x1) * m
+            dy = (y0-y1) * m
+            if self.selection is None:
+                self.scroll_x = x + dx
+                self.scroll_y = y + dy
+            else:
+                self.selection.x = x - dx
+                self.selection.y = y - dy
+
+        # update and render menu and UI
+        screen.fill(Palette.background)
+
+        # update and render graph objects
         for link in visible_l:
             Manager.links[link].update(events)
         for point in visible_p:

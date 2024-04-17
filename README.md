@@ -31,8 +31,8 @@ Progression graph tool for games
 - Save files, in zip?
 - Image file search box, use already existing image
 - png transparent background option
-- point as block, specify size with rank system?
-- hold shift to only edit X or Y coordinate
+- Point as block, specify size with rank system?
+- Hold shift to only edit X or Y coordinates
 - Scroll position and zoom in save file?
 - Be more generous for displaying visible objects
 - Cursor system for inputbox?

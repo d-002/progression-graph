@@ -1,9 +1,16 @@
+import os
 import pygame
+from os.path import *
 from pygame.locals import *
 
 def syntax_error(y, expression):
     """Used to help handling file parsing errors"""
     raise SyntaxError('Could not parse save file at line %d: "%s"' %(y+1, expression))
+
+def load_image():
+    """Asks for an image path, load it if valid"""
+    path = ask_input_box('Enter valid image path:', str, check=lambda s: exists(s))
+    if path is not None: Manager.add_image(path)
 
 class Palette:
     """Static class, used to store colors data"""
@@ -11,11 +18,12 @@ class Palette:
     background = (40, 40, 43)
     neutral = (80, 80, 85)
     red = (255, 0, 0)
+    link = (0, 255, 0)
 
-def ask_input_box(message, cast, max_width=400, forbidden='', allow_empty=False):
+def ask_input_box(message, cast, max_width=400, check=lambda s: len(s)):
     """Input box, freezes other actions to ask for user value.
 Param cast: function used to check for input format
-Param forbidden: don't allow these characters"""
+    Param check: lambda used to check if the entry value is valid"""
 
     # make a darkened background from the current screen state
     dark = pygame.Surface((Graph.W, Graph.H), SRCALPHA)
@@ -30,9 +38,9 @@ Param forbidden: don't allow these characters"""
     background.blit(text, (Graph.W/2 - text.get_width()/2, Graph.H*0.3))
 
     # init error text
-    error_text = [font.render('Error: incorrect value', True, Palette.red),
-                  font.render(' Error: text too long', True, Palette.red),
-                  font.render("Error: can't be empty", True, Palette.red)]
+    error_text = [font.render("Error: can't decode value", True, Palette.red),
+                  font.render('  Error: text too long', True, Palette.red),
+                  font.render('  Error: invalid value', True, Palette.red)]
     error_pos = (Graph.W/2 - error_text[0].get_width()/2, Graph.H*0.3 + 20)
 
     # get the "_" character width, useful later on
@@ -50,7 +58,7 @@ Param forbidden: don't allow these characters"""
                 if event.key == K_BACKSPACE: string = string[:-1]
                 elif event.key == K_RETURN or event.key == K_KP_ENTER:
                     enter = True
-                elif event.unicode not in forbidden:
+                else:
                     string += event.unicode
 
         # add blinking cursor for displayed text
@@ -67,9 +75,8 @@ Param forbidden: don't allow these characters"""
             temp = text
             text = pygame.Surface((max_width, 16), SRCALPHA)
             text.blit(temp, (0, 0))
-        if enter and not error:
-            if not string and not allow_empty: error = 3
-            else: run = False
+        if not check(string): error = 3
+        if enter and not error: run = False
 
         screen.blit(background, (0, 0))
         if error: screen.blit(error_text[error-1], error_pos)
@@ -103,18 +110,21 @@ class Manager:
         else: id = int(id)
 
         _dict[id] = _class(*args, id)
+        return _dict[id]
 
     @staticmethod
     def new_point(x, y, id=None):
-        Manager.new_obj((float(x), float(y)), Point, Manager.points, id)
+        return Manager.new_obj((float(x), float(y)), Point, Manager.points, id)
 
     @staticmethod
-    def new_link(x, y, id=None):
-        Manager.new_obj((float(x), float(y)), Link, Manager.links, id)
+    def new_link(p1, p2, id=None):
+        p1 = Manager.points[int(p1)]
+        p2 = None if p2 is None else Manager.points[int(p2)]
+        return Manager.new_obj((p1, p2), Link, Manager.links, id)
 
     @staticmethod
     def new_image(name, id=None):
-        Manager.new_obj((name,), Image, Manager.images, id)
+        return Manager.new_obj((name,), Image, Manager.images, id)
 
     @staticmethod
     def attach_image(point_id, image_id):
@@ -125,6 +135,12 @@ class Manager:
     def attach_text(point_id, text):
         """Sets the text of a point"""
         points[int(point_id)].set_text(text)
+
+    @staticmethod
+    def reset():
+        Manager.points = {}
+        Manager.links = {}
+        Manager.images = {}
 
 class GraphObject:
     def update(self, events):
@@ -147,7 +163,7 @@ class Point(GraphObject):
     def set_text(self, text):
         """Sets the point's text and updates its text Surface"""
         self.text = text
-        self.text_surf = None if not text else font.render(text, True, Palette.text)
+        self.text_surf = None if text == '' else font.render(text, True, Palette.text)
 
     def set_image(self, image):
         self.image = int(image)
@@ -166,40 +182,45 @@ class Point(GraphObject):
 class Link(GraphObject):
     """Link between two points in the graph"""
     def __init__(self, p1, p2, id):
-        self.x = x
-        self.y = y
         self.id = id
         self.strength = 5
 
-        # linked points IDs
+        # linked points (/!\ not IDs)
         self.p1 = p1
-        self.p2 = p2
+        self.p2 = p2 # can be None if just created
 
     def update(self, events):
-        pass
+        pos1 = graph.get_pos(self.p1.x, self.p1.y)
+        if self.p2 is None: pos2 = pygame.mouse.get_pos()
+        else: pos2 = graph.get_pos(self.p2.x, self.p2.y)
+        pygame.draw.line(screen, Palette.link, pos1, pos2, self.strength)
 
 class Image:
     """Pygame surface loaded from image file"""
-    def __init__(self, name, id):
-        self.name = name
-        self.surf = pygame.image.load('images/%s.png' %name)
+    def __init__(self, path, id):
+        self.name = splitext(basename(name))[0]
+        self.surf = pygame.image.load(path)
 
 class UI:
     """UI elements on top of the screen: help, info about selection"""
     def __init__(self):
         self.surf = pygame.Surface((Graph.W, 40), SRCALPHA) # blitted, cached surface
-        self.help_text = font.render('P: new point, S: save file, O: open file, I: load image', True, Palette.text)
-        self.update_surf()
+        self.text = [
+            'P: new point, S: save file, O: open file, I: load image',
+            'L: start link, I: add image, T: add text, Del: delete image+text'
+        ]
+        self.text = [font.render(text, True, Palette.text) for text in self.text]
 
     def update_surf(self):
         """Updates cached surface: redraw background, add elements depending on selection"""
         pygame.draw.rect(self.surf, Palette.neutral, Rect((0, 0), (Graph.W, 40)))
 
         if graph.selection is None:
-            self.surf.blit(self.help_text, (11, 11))
+            self.surf.blit(self.text[0], (12, 12))
+        elif type(graph.selection) == Point:
+            self.surf.blit(self.text[1],(12, 12))
 
     def update(self):
-        
         self.surf.set_alpha(100 if pygame.mouse.get_pos()[1] < 40 else 255)
         screen.blit(self.surf, (0, 0))
 
@@ -215,16 +236,32 @@ class Graph:
         self.unit_size = 100 # graph unit to pixel ratio
 
         self.save_file = None
-        self.objects = []
 
         # movement utilities
         self.drag_start = None # moved/scroll element pos when drag started
         self.drag_mouse_start = None # mouse pos when drag started
+
         self.selection = None # selected GraphPoint, or None if no selection
+        self.hovered = None # hovered Graphpoint
+        self.hovered = None # hovered Link (separate them to avoid issues when drawing a link)
+        self.link = None # if link in construction, store it here, else None
+
+        self.ui = UI()
 
     def open(self, save_file):
         """Sets self.save_file and load save file"""
         self.save_file = save_file
+        
+        # reset variables
+        self.drag_start = None
+        self.drag_mouse_start = None
+        self.selection = None
+        self.hovered = None
+        self.hovered_l = None
+        self.link = None
+        self.ui.update_surf()
+
+        Manager.reset()
 
         # TODO: handle deletion of old objects
 
@@ -315,39 +352,48 @@ class Graph:
         """Updates objects and menu, displays the graph"""
         # move and zoom
         pressed = pygame.mouse.get_pressed()[0]
+        mpos = pygame.mouse.get_pos()
 
         # get visible graph objects now, useful for collision checks
-        visible_p = [] # points
-        for id, point in Manager.points.items():
+        visible_p = [] # points objects that are visible
+        for point in Manager.points.values():
             if self.visible(point.x, point.y):
-                visible_p.append(id)
-        visible_l = [] # links
-        for id, link in Manager.links.items():
-            if link.p1 in visible_p or link.p2 in visible_p:
-                visible_l.append(id)
+                visible_p.append(point)
+        visible_l = [] # same for links
+        for link in Manager.links.values():
+            if link.p1 in visible_p or link.p2 in visible_p or link.p2 is None or True:
+                visible_l.append(link)
+ 
+        self.hovered = None
+        self.hovered_l = None
+        for point in visible_p:
+            if point.collide(mpos):
+                self.hovered = point
+                break
+        for link in visible_l:
+            if self.hovered is not None: break
+            if point.collide(mpos): self.hovered_l = link
 
         # events check
         for event in events:
+            # start dragging
             if event.type == MOUSEBUTTONDOWN and event.button == 1:
-                self.selection = None
-                for point in visible_p:
-                    if self.selection is not None: break
-                    point = Manager.points[point]
-                    if point.collide(event.pos): self.selection = point
-                for link in visible_l:
-                    if self.selection is not None: break
-                    link = Manager.points[link]
-                    if point.collide(event.pos): self.selection = link
+                self.selection = self.hovered
 
-                # start dragging
                 if self.selection is None:
                     self.drag_start = (self.scroll_x, self.scroll_y)
                 else:
                     self.drag_start = (self.selection.x, self.selection.y)
                 self.drag_mouse_start = event.pos
+                self.ui.update_surf()
 
+                # finish adding a link
+                if type(self.selection) == Point and self.link is not None and self.link.p1 != self.selection:
+                    self.link.p2 = self.selection
+                    self.link = None
+
+            # stop dragging
             elif event.type == MOUSEBUTTONUP and event.button == 1:
-                # stop dragging
                 self.drag_start = None
                 self.drag_mouse_start = None
 
@@ -356,6 +402,25 @@ class Graph:
                 if event.y > 0: self.zoom *= 1.2 # zoom in
                 elif self.zoom > 0.1: self.zoom /= 1.2 # zoom out
                 else: self.zoom = 0.1 # min zoom
+
+            # keys
+            elif event.type == KEYDOWN:
+                if self.selection is None:
+                    if event.key == K_p:
+                        Manager.new_point(*mpos)
+                    elif event.key == K_i:
+                        load_image()
+                    else: # TODO
+                        pass
+                elif type(self.selection) == Point:
+                    if event.key == K_l and self.link is None:
+                        self.link = Manager.new_link(self.selection.id, None)
+                    elif event.key == K_i:
+                        pass
+                    elif event.key == K_t:
+                        pass
+                    elif event.key == K_DELETE:
+                        pass
 
         if self.drag_start is not None:
             x, y = self.drag_start
@@ -373,12 +438,11 @@ class Graph:
 
         # update and render menu and UI
         screen.fill(Palette.background)
+        self.ui.update()
 
         # update and render graph objects
-        for link in visible_l:
-            Manager.links[link].update(events)
-        for point in visible_p:
-            Manager.points[point].update(events)
+        for link in visible_l: link.update(events)
+        for point in visible_p: point.update(events)
 
 FPS = 60
 pygame.init()
@@ -400,9 +464,6 @@ while run:
     events = pygame.event.get()
     for event in events:
         if event.type == QUIT: run = False
-        elif event.type == KEYDOWN:
-            if event.key == K_p:
-                print(ask_input_box('Test message box', int))
 
     graph.update(events)
     pygame.display.flip()

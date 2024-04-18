@@ -25,7 +25,8 @@ Progression graph tool for games
 ## Main TODO
 - Core mechanics described above
 - Handle objects deletion and IDs
-- Handle deletion of old objects in open_file
+- Only save used images
+- Image selector
 
 ### Optional TODO
 - Save files, in zip?

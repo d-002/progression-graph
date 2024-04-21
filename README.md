@@ -29,7 +29,11 @@ Progression graph tool for games
 - Image selector
 
 ### Optional TODO
+- Message boxes, error when failed to load image
+- Cancel button
+- Change images system?
 - Save files, in zip?
+- Popup when saving file or loading image, handle errors in there
 - Image file search box, use already existing image
 - png transparent background option
 - Point as block, specify size with rank system?

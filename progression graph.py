@@ -10,7 +10,7 @@ def syntax_error(y, expression):
 def load_image():
     """Asks for an image path, load it if valid"""
     path = ask_input_box('Enter valid image path:', str, check=lambda s: exists(s))
-    if path is not None: Manager.add_image(path)
+    if path is not None: Manager.new_image(path)
 
 class Palette:
     """Static class, used to store colors data"""
@@ -20,7 +20,7 @@ class Palette:
     red = (255, 0, 0)
     link = (0, 255, 0)
 
-def ask_input_box(message, cast, max_width=400, check=lambda s: len(s)):
+def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     """Input box, freezes other actions to ask for user value.
 Param cast: function used to check for input format
     Param check: lambda used to check if the entry value is valid"""
@@ -198,8 +198,10 @@ class Link(GraphObject):
 class Image:
     """Pygame surface loaded from image file"""
     def __init__(self, path, id):
-        self.name = splitext(basename(name))[0]
+        self.name = splitext(basename(path))[0]
+        self.path = path
         self.surf = pygame.image.load(path)
+        self.id = id
 
 class UI:
     """UI elements on top of the screen: help, info about selection"""
@@ -321,7 +323,7 @@ class Graph:
         # images
         content += ('', '# IMAGES')
         for id, image in Manager.images.items():
-            content.append('I %s %d' %(image.name, image.id))
+            content.append('I %s %d' %(image.path, image.id))
 
         # images attached to points
         content += ('', '# LINK IMAGES')
@@ -408,10 +410,13 @@ class Graph:
                 if self.selection is None:
                     if event.key == K_p:
                         Manager.new_point(*mpos)
+                    elif event.key == K_s:
+                        self.save()
+                    elif event.key == K_o:
+                        file = ask_input_box('Enter save file', str, lambda s: exists(s))
+                        if file is not None: self.open(file)
                     elif event.key == K_i:
                         load_image()
-                    else: # TODO
-                        pass
                 elif type(self.selection) == Point:
                     if event.key == K_l and self.link is None:
                         self.link = Manager.new_link(self.selection.id, None)

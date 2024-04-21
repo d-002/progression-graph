@@ -5,6 +5,7 @@ P 1 0 1
 # LINKS
 
 # IMAGES
+I pick.png 0
 
 # LINK IMAGES
 

@@ -7,11 +7,6 @@ def syntax_error(y, expression):
     """Used to help handling file parsing errors"""
     raise SyntaxError('Could not parse save file at line %d: "%s"' %(y+1, expression))
 
-def load_image():
-    """Asks for an image path, load it if valid"""
-    path = ask_input_box('Enter valid image path:', str, check=lambda s: exists(s))
-    if path is not None: Manager.new_image(path)
-
 class Palette:
     """Static class, used to store colors data"""
     text = (255, 255, 255)
@@ -19,6 +14,10 @@ class Palette:
     neutral = (80, 80, 85)
     red = (255, 0, 0)
     link = (0, 255, 0)
+
+    box_outline = (0, 0, 0)
+    box_outer = (127, 127, 127)
+    box_inner = (100, 100, 100)
 
 def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     """Input box, freezes other actions to ask for user value.
@@ -93,6 +92,52 @@ Param cast: function used to check for input format
 
     return cast(string)
 
+def image_selector():
+    # get and resize all loaded images
+    images = list(Manager.images.values())*100
+    for i, image in enumerate(images):
+        surf = image.surf
+        w, h = surf.get_size()
+        if w > h: w, h = 50, 50*h/w
+        else: w, h = 50*w/h, 50
+        images[i] = pygame.transform.scale(surf, (w, h))
+
+    w = (Graph.W-50) // 100 # images in one row
+    height = len(images)//Graph.W*100 + 50
+    scroll = 0
+    do_scroll = height > Graph.H
+
+    run = True
+    selection = None
+    while run:
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                run = False
+                selection = None
+            elif event.type == MOUSEWHEEL and do_scroll:
+                scroll = min(max(scroll - 20*event.y, 0), height-Graph.H)
+            elif event.type == MOUSEBUTTONDOWN and selection is not None:
+                run = False # clicked on an image
+
+        screen.fill(Palette.background)
+
+        # draw scrollbar if needed
+        if do_scroll:
+            y = scroll * Graph.H / (height-20)
+            h = Graph.H*Graph.H/height - 20
+            pygame.draw.rect(screen, Palette.text, Rect(Graph.W-15, 10+y, 5, h))
+
+        for i, image in enumerate(images):
+            x, y = 50 + 100*(i%w), 50 + 100*(i//w) - scroll
+            if -50 < y < Graph.H-50:
+                screen.blit(image, (x, y))
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
+    if selection is not None:
+        return selection
+
 class Manager:
     """Manager for all objects. Should be used to create and remove new objects, as it manages the ID system."""
 
@@ -113,8 +158,8 @@ class Manager:
         return _dict[id]
 
     @staticmethod
-    def new_point(x, y, id=None):
-        return Manager.new_obj((float(x), float(y)), Point, Manager.points, id)
+    def new_point(x, y, rank, id=None):
+        return Manager.new_obj((float(x), float(y), int(rank)), Point, Manager.points, id)
 
     @staticmethod
     def new_link(p1, p2, id=None):
@@ -129,7 +174,7 @@ class Manager:
     @staticmethod
     def attach_image(point_id, image_id):
         """Sets the image reference of a point"""
-        points[int(point_id)].set_image(image_id)
+        points[int(point_id)].set_image(Manager.images[int(image_id)])
 
     @staticmethod
     def attach_text(point_id, text):
@@ -151,14 +196,27 @@ class GraphObject:
 
 class Point(GraphObject):
     """Point in the graph, can be attached to various links and have text and an image"""
-    def __init__(self, x, y, id):
+    def __init__(self, x, y, rank, id):
         self.x = x
         self.y = y
+        self.rank = rank
         self.id = id
 
         self.text = ''
         self.text_surf = None # rendered pygame font, None for no text
-        self.image = -1 # image id, -1 for no image
+        self.image = None # image, None for no image
+
+        self.surf = None # should always contain the surface with the right size
+        self.size = None # should contain the size according to self.rank
+
+        self.set_rank() # init self.surf and self.size
+
+    @staticmethod
+    def get_rank_size(rank):
+        """Returns the size from a particular point rank, handles incorrect values"""
+        sizes = [20, 30, 50, 80]
+        rank = min(max(rank, 0), len(sizes)-1)
+        return sizes[rank]
 
     def set_text(self, text):
         """Sets the point's text and updates its text Surface"""
@@ -166,18 +224,39 @@ class Point(GraphObject):
         self.text_surf = None if text == '' else font.render(text, True, Palette.text)
 
     def set_image(self, image):
-        self.image = int(image)
+        """Sets and resizes self.surf depending on self.size"""
+        s = self.size
+        self.image = image
+        self.surf = pygame.Surface((s, s))
 
-    def remove_image(self):
-        self.image = -1
+        # draw empty box
+        m = int(self.size/10) # outline margin
+        if m > 5: m = 5
+        self.surf.fill(Palette.box_outline)
+        pygame.draw.rect(self.surf, Palette.box_outer, Rect(1, 1, s-2, s-2))
+        pygame.draw.rect(self.surf, Palette.box_inner, Rect(m, m, s - m*2, s - m*2))
+
+        # if image, resize it and add it to the surface
+        if image is not None:
+            w, h = image.surf.get_size()
+            if w > h: w, h = 50, 50*h/w
+            else: w, h = 50*w/h, 50
+
+            self.surf.blit(pygame.transform.scale(image.surf, (w, h)), (0, 0))
+
+    def set_rank(self):
+        self.size = Point.get_rank_size(self.rank)
+        self.set_image(self.image)
 
     def collide(self, pos):
         x, y = graph.get_pos(self.x, self.y)
-        return x-10 < pos[0] < x+10 and y-10 < pos[1] < y+10
+        s = self.size/2
+        return x-s < pos[0] < x+s and y-s < pos[1] < y+s
 
     def update(self, events):
         x, y = graph.get_pos(self.x, self.y)
-        pygame.draw.rect(screen, Palette.text, Rect((x-3, y-3), (6, 6)))
+
+        screen.blit(self.surf, (x - self.size/2, y - self.size/2))
 
 class Link(GraphObject):
     """Link between two points in the graph"""
@@ -185,7 +264,7 @@ class Link(GraphObject):
         self.id = id
         self.strength = 5
 
-        # linked points (/!\ not IDs)
+        # linked points
         self.p1 = p1
         self.p2 = p2 # can be None if just created
 
@@ -288,7 +367,7 @@ class Graph:
             # execute action depending on command
             match cmd:
                 case 'P': # add new point
-                    if len(args) != 3: syntax_error(y, raw)
+                    if len(args) != 4: syntax_error(y, raw)
                     Manager.new_point(*args)
                 case 'L': # add new link
                     if len(args) != 3: syntax_error(y, raw)
@@ -313,12 +392,12 @@ class Graph:
         # points
         content.append('# POINTS')
         for id, point in Manager.points.items():
-            content.append('P %d %d %d' %(point.x, point.y, id))
+            content.append('P %s %s %d %d' %(point.x, point.y, point.rank, id))
 
         # links
         content += ('', '# LINKS')
         for id, link in Manager.links.items():
-            content.append('L %d %d %d' %(Manager.points[link.p1].id, Manager.points[link.p2].id, id))
+            content.append('L %d %d %d' %(link.p1.id, link.p2.id, id))
 
         # images
         content += ('', '# IMAGES')
@@ -328,8 +407,8 @@ class Graph:
         # images attached to points
         content += ('', '# LINK IMAGES')
         for id, point in Manager.points.items():
-            if point.image != -1:
-                content.append('Ai %d %d' %(id, Manager.images[point.image].id))
+            if point.image is not None:
+                content.append('Ai %d %d' %(id, point.image.id))
 
         # text attached to points
         content += ('', '# TEXT')
@@ -413,15 +492,17 @@ class Graph:
                     elif event.key == K_s:
                         self.save()
                     elif event.key == K_o:
-                        file = ask_input_box('Enter save file', str, lambda s: exists(s))
-                        if file is not None: self.open(file)
+                        path = ask_input_box('Enter save file', str, lambda s: exists(s))
+                        if path is not None: self.open(path)
                     elif event.key == K_i:
-                        load_image()
+                        path = ask_input_box('Enter valid image path:', str, check=lambda s: exists(s))
+                        if path is not None: Manager.new_image(path)
                 elif type(self.selection) == Point:
                     if event.key == K_l and self.link is None:
                         self.link = Manager.new_link(self.selection.id, None)
                     elif event.key == K_i:
-                        pass
+                        image = image_selector()
+                        if image is not None: self.selection.set_image(image)
                     elif event.key == K_t:
                         pass
                     elif event.key == K_DELETE:
@@ -460,7 +541,6 @@ ticks = pygame.time.get_ticks
 
 graph = Graph()
 graph.open('test_save.txt')
-graph.save()
 
 dt = 0 # time passed in last frame, in seconds
 run = True

@@ -15,9 +15,9 @@ class Palette:
     red = (255, 0, 0)
     link = (0, 255, 0)
 
-    box_outline = (0, 0, 0)
-    box_outer = (127, 127, 127)
-    box_inner = (100, 100, 100)
+    box_outer = (90, 90, 90)
+    box_sep = (50, 50, 50)
+    box_inner = (130, 130, 130)
 
 def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     """Input box, freezes other actions to ask for user value.
@@ -102,8 +102,8 @@ def image_selector():
         else: w, h = 50*w/h, 50
         images[i] = pygame.transform.scale(surf, (w, h))
 
-    w = (Graph.W-50) // 100 # images in one row
-    height = len(images)//Graph.W*100 + 50
+    w = (Graph.W-50) // 90 # images in one row
+    height = len(images)//w*90 + 50
     scroll = 0
     do_scroll = height > Graph.H
 
@@ -128,8 +128,8 @@ def image_selector():
             pygame.draw.rect(screen, Palette.text, Rect(Graph.W-15, 10+y, 5, h))
 
         for i, image in enumerate(images):
-            x, y = 50 + 100*(i%w), 50 + 100*(i//w) - scroll
-            if -50 < y < Graph.H-50:
+            x, y = 50 + 90*(i%w), 50 + 90*(i//w) - scroll
+            if -50 < y < Graph.H:
                 screen.blit(image, (x, y))
 
         pygame.display.flip()
@@ -232,8 +232,8 @@ class Point(GraphObject):
         # draw empty box
         m = int(self.size/10) # outline margin
         if m > 5: m = 5
-        self.surf.fill(Palette.box_outline)
-        pygame.draw.rect(self.surf, Palette.box_outer, Rect(1, 1, s-2, s-2))
+        self.surf.fill(Palette.box_outer)
+        pygame.draw.rect(self.surf, Palette.box_sep, Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
         pygame.draw.rect(self.surf, Palette.box_inner, Rect(m, m, s - m*2, s - m*2))
 
         # if image, resize it and add it to the surface

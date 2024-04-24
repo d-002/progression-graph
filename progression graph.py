@@ -101,6 +101,8 @@ Param cast: function used to check for input format
     return cast(string)
 
 def image_selector():
+    """Graphical image selector, displays all loaded images into a grid for the user to select"""
+
     # get and resize all loaded images
     images = list(Manager.images.values())
     ids = list(Manager.images.keys())
@@ -167,7 +169,7 @@ class Manager:
 
     @staticmethod
     def new_obj(args, _class, _dict, id):
-        """Adds a new object to the corresponding dictionary, assign an ID if needed"""
+        """Adds a new object to the corresponding dictionary, assigns an ID if needed"""
         if id is None:
             id = 0 # get the first available ID, starting at 0
             while id in _dict: id += 1
@@ -178,7 +180,16 @@ class Manager:
 
     @staticmethod
     def new_point(x, y, rank, id=None):
-        return Manager.new_obj((float(x), float(y), int(rank)), Point, Manager.points, id)
+        result = Manager.new_obj((float(x), float(y), int(rank)), Point, Manager.points, id)
+
+        # sort points to display the more important ones on top
+        keys = sorted(Manager.points.keys(), key=lambda key: Manager.points[key].rank)
+        copy = dict(Manager.points)
+        Manager.points = {}
+        for key in keys:
+            Manager.points[key] = copy[key]
+
+        return result
 
     @staticmethod
     def new_link(p1, p2, id=None):
@@ -285,7 +296,7 @@ class Point(GraphObject):
         x, y = graph.get_pos(self.x, self.y)
 
         # use a different texture when hovered
-        i = self.collide(pygame.mouse.get_pos())
+        i = self.collide(pygame.mouse.get_pos()) or self == graph.selection
         screen.blit(self.surfs[i], (x - self.size/2, y - self.size/2))
 
 class Link(GraphObject):
@@ -308,7 +319,9 @@ class Link(GraphObject):
 
     def update_rank(self):
         """Triggered for all links when a point changes rank, to update their rank"""
-        self.rank = max(self.p1.rank, self.p2.rank)
+        if self.p2 is None: self.rank = self.p1.rank
+        else: self.rank = max(self.p1.rank, self.p2.rank)
+
         self.size = Link.get_rank_size(self.rank)
 
     def update(self, events):
@@ -336,7 +349,7 @@ class UI:
         self.text = [font.render(text, True, Palette.text) for text in self.text]
 
     def update_surf(self):
-        """Updates cached surface: redraw background, add elements depending on selection"""
+        """Updates cached Surface: redraws background, adds elements depending on selection"""
         pygame.draw.rect(self.surf, Palette.neutral, Rect((0, 0), (Graph.W, 40)))
 
         if graph.selection is None:
@@ -373,7 +386,7 @@ class Graph:
         self.ui = UI()
 
     def open(self, save_file):
-        """Sets self.save_file and load save file"""
+        """Sets self.save_file and loads save file"""
         self.save_file = save_file
         
         # reset variables
@@ -427,7 +440,7 @@ class Graph:
                 case _: syntax_error(y, raw)
 
     def save(self):
-        """Save graph contents into self.save_file"""
+        """Saves graph contents into self.save_file"""
         content = []
 
         if self.save_file is None: raise ValueError('No save loaded')
@@ -473,9 +486,14 @@ class Graph:
         return (x - self.W/2) / z + self.scroll_x, (y - self.H/2) / z + self.scroll_y
 
     def visible(self, x, y):
-        """Returns true if point is visible (taking scroll and zoom into account), else false"""
+        """Returns true if the point is visible (taking scroll and zoom into account), else false"""
         x, y = self.get_pos(x, y)
         return 0 <= x < self.W and 0 <= y < self.H
+
+    def select(self, obj):
+        """Sets self.selection to obj and updates self.ui"""
+        self.selection = obj
+        self.ui.update_surf()
 
     def update(self, events):
         """Updates objects and menu, displays the graph"""
@@ -507,19 +525,21 @@ class Graph:
         for event in events:
             # start dragging
             if event.type == MOUSEBUTTONDOWN and event.button == 1:
-                self.selection = self.hovered
+                self.select(self.hovered)
 
                 if self.selection is None:
                     self.drag_start = (self.scroll_x, self.scroll_y)
                 else:
                     self.drag_start = (self.selection.x, self.selection.y)
                 self.drag_mouse_start = event.pos
-                self.ui.update_surf()
 
                 # finish adding a link
                 if type(self.selection) == Point and self.link is not None and self.link.p1 != self.selection:
                     self.link.p2 = self.selection
+                    self.link.update_rank()
                     self.link = None
+                    self.select(None)
+                    self.drag_start = None # prevent unwanted drag
 
             # stop dragging
             elif event.type == MOUSEBUTTONUP and event.button == 1:
@@ -534,7 +554,18 @@ class Graph:
 
             # keys
             elif event.type == KEYDOWN:
-                if self.selection is None:
+                if event.key == K_z: self.zoom = 1
+                elif event.key == K_ESCAPE:
+                    if self.link is None:
+                        # unselect by hitting Escape
+                        self.select(None)
+                    else:
+                        # or undo the creation of a new link
+                        del Manager.links[self.link.id]
+                        self.link = None
+                elif event.key == K_RETURN and self.link is None:
+                    self.select(None)
+                elif self.selection is None:
                     if event.key == K_p:
                         Manager.new_point(*self.from_pos(*mpos), 0)
                     elif event.key == K_s:
@@ -561,7 +592,7 @@ class Graph:
                         del Manager.points[self.selection.id]
                         for link in to_delete:
                             del Manager.links[link]
-                        self.selection = None
+                        self.select(None)
 
         if self.drag_start is not None:
             x, y = self.drag_start
@@ -592,7 +623,6 @@ screen = pygame.display.set_mode((Graph.W, Graph.H))
 pygame.display.set_caption('Progression graph')
 font = pygame.font.SysFont('consolas', 16)
 clock = pygame.time.Clock()
-ticks = pygame.time.get_ticks
 
 graph = Graph()
 graph.open('test_save.txt')

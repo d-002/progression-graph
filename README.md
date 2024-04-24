@@ -23,25 +23,19 @@ Progression graph tool for games
 - `At p text`: attaches text to the point of ID *p*
 - `# comment`: comment
 
-## Main TODO
-- Core mechanics described above
-- Handle objects deletion and IDs
+## TODO
 - Only save used images
-- Image selector
-
-### Optional TODO
 - Trigger quit next frame when input returns None
 - Save before quit?
 - Message boxes, error when failed to load image
 - Don't allow spaces in images: rename? replace?
-- Cancel button
-- Change images system?
+- Cancel button in popups
+- File selector for images?
 - Save files, in zip?
-- Popup when saving file or loading image, handle errors in there
-- Image file search box, display loaded images
-- png transparent background option
-- Update links strength when changing points ranks
+- upload to png, transparent background option
 - Change point and links ranks
 - Hold shift to only edit X or Y coordinates?
 - Scroll position and zoom in save file?
 - Be more generous for displaying visible objects
+- Change images and sizes on zoom
+- Key to zoom back to original size

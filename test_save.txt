@@ -1,5 +1,5 @@
 # POINTS
-P -0.84 0.54 2 0
+P -0.85 0.55 2 0
 P 1.0 0.0 3 1
 
 # LINKS
@@ -9,5 +9,6 @@ L 0 1 0
 I pick.png 0
 
 # LINK IMAGES
+Ai 0 0
 
 # TEXT

@@ -102,7 +102,8 @@ Param cast: function used to check for input format
 
 def image_selector():
     # get and resize all loaded images
-    images = list(Manager.images.values())*100
+    images = list(Manager.images.values())
+    ids = list(Manager.images.keys())
     for i, image in enumerate(images):
         surf = image.surf
         w, h = surf.get_size()
@@ -135,16 +136,26 @@ def image_selector():
             h = Graph.H*Graph.H/height - 20
             pygame.draw.rect(screen, Palette.text, Rect(Graph.W-15, 10+y, 5, h))
 
+        # get mouse data and display images
+        mx, my = pygame.mouse.get_pos()
+        click = pygame.mouse.get_pressed()[0]
+        selection = None
         for i, image in enumerate(images):
             x, y = 50 + 90*(i%w), 50 + 90*(i//w) - scroll
             if -50 < y < Graph.H:
+                if x-10 <= mx < x+60 and y-10 <= my < y+60:
+                    # image hovered
+                    pygame.draw.rect(screen, Palette.neutral, Rect(x-10, y-10, 70, 70))
+                    if click:
+                        selection = i # image clicked
+                        run = False
                 screen.blit(image, (x, y))
 
         pygame.display.flip()
         clock.tick(FPS)
 
-    if selection is not None:
-        return selection
+    if selection is None: return
+    return Manager.images[ids[selection]]
 
 class Manager:
     """Manager for all objects. Should be used to create and remove new objects, as it manages the ID system."""
@@ -182,7 +193,7 @@ class Manager:
     @staticmethod
     def attach_image(point_id, image_id):
         """Sets the image reference of a point"""
-        points[int(point_id)].set_image(Manager.images[int(image_id)])
+        Manager.points[int(point_id)].set_image(Manager.images[int(image_id)])
 
     @staticmethod
     def attach_text(point_id, text):
@@ -247,12 +258,13 @@ class Point(GraphObject):
         # if image, resize it and add it to the surface
         if image is not None:
             w, h = image.surf.get_size()
-            if w > h: w, h = 50, 50*h/w
-            else: w, h = 50*w/h, 50
+            s -= m*2 + 2
+            if w > h: w, h = s, s*h/w
+            else: w, h = s*w/h, s
 
-            image = pygame.transform.scale(image.surf, (w, h)), (0, 0)
-            self.surfs[0].blit(image)
-            self.surfs[1].blit(image)
+            image = pygame.transform.scale(image.surf, (w, h))
+            self.surfs[0].blit(image, (m+1, m+1))
+            self.surfs[1].blit(image, (m+1, m+1))
 
     def set_rank(self, rank):
         self.rank = rank
@@ -260,8 +272,8 @@ class Point(GraphObject):
         self.set_image(self.image)
 
         # update points sizes
-        for links in Manager.links:
-            links.update_rank()
+        for link in Manager.links.values():
+            link.update_rank()
 
     def collide(self, pos):
         """Checks if the given position in screen coordinates intersects with the point"""
@@ -455,6 +467,11 @@ class Graph:
         z = self.zoom * self.unit_size
         return (x - self.scroll_x) * z + self.W/2, (y - self.scroll_y) * z + self.H/2
 
+    def from_pos(self, x, y):
+        """Returns the position, in graph coordinates, corresponding to a position in screen coordinates"""
+        z = self.zoom * self.unit_size
+        return (x - self.W/2) / z + self.scroll_x, (y - self.H/2) / z + self.scroll_y
+
     def visible(self, x, y):
         """Returns true if point is visible (taking scroll and zoom into account), else false"""
         x, y = self.get_pos(x, y)
@@ -512,14 +529,14 @@ class Graph:
             # zoom
             elif event.type == MOUSEWHEEL and not pressed:
                 if event.y > 0: self.zoom *= 1.2 # zoom in
-                elif self.zoom > 0.1: self.zoom /= 1.2 # zoom out
-                else: self.zoom = 0.1 # min zoom
+                elif self.zoom > 0.01: self.zoom /= 1.2 # zoom out
+                else: self.zoom = 0.01 # min zoom
 
             # keys
             elif event.type == KEYDOWN:
                 if self.selection is None:
                     if event.key == K_p:
-                        Manager.new_point(*mpos)
+                        Manager.new_point(*self.from_pos(*mpos), 0)
                     elif event.key == K_s:
                         self.save()
                     elif event.key == K_o:
@@ -537,7 +554,14 @@ class Graph:
                     elif event.key == K_t:
                         pass
                     elif event.key == K_DELETE:
-                        pass
+                        to_delete = [] # links that connect to the deleted point
+                        for id, link in Manager.links.items():
+                            if link.p1 == self.selection or link.p2 == self.selection:
+                                to_delete.append(id)
+                        del Manager.points[self.selection.id]
+                        for link in to_delete:
+                            del Manager.links[link]
+                        self.selection = None
 
         if self.drag_start is not None:
             x, y = self.drag_start

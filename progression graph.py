@@ -19,6 +19,14 @@ class Palette:
     box_sep = (50, 50, 50)
     box_inner = (130, 130, 130)
 
+    @staticmethod
+    def mult(col, x):
+        """Changes the exposition of a color: x=1 does nothing, x=0 is black, and colors are clamped"""
+        if x == 1: return col
+        
+        r, g, b = col[0]*x, col[1]*x, col[2]*x
+        return (255 if r > 255 else r, 255 if g > 255 else g, 255 if b > 255 else b)
+
 def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     """Input box, freezes other actions to ask for user value.
 Param cast: function used to check for input format
@@ -199,7 +207,6 @@ class Point(GraphObject):
     def __init__(self, x, y, rank, id):
         self.x = x
         self.y = y
-        self.rank = rank
         self.id = id
 
         self.text = ''
@@ -209,7 +216,7 @@ class Point(GraphObject):
         self.surf = None # should always contain the surface with the right size
         self.size = None # should contain the size according to self.rank
 
-        self.set_rank() # init self.surf and self.size
+        self.set_rank(rank) # init self.rank, self.size and self.surf
 
     @staticmethod
     def get_rank_size(rank):
@@ -224,17 +231,18 @@ class Point(GraphObject):
         self.text_surf = None if text == '' else font.render(text, True, Palette.text)
 
     def set_image(self, image):
-        """Sets and resizes self.surf depending on self.size"""
+        """Sets and resizes self.surfs depending on self.size"""
         s = self.size
         self.image = image
-        self.surf = pygame.Surface((s, s))
+        self.surfs = [pygame.Surface((s, s)), pygame.Surface((s, s))]
 
         # draw empty box
         m = int(self.size/10) # outline margin
         if m > 5: m = 5
-        self.surf.fill(Palette.box_outer)
-        pygame.draw.rect(self.surf, Palette.box_sep, Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
-        pygame.draw.rect(self.surf, Palette.box_inner, Rect(m, m, s - m*2, s - m*2))
+        for i, mult in enumerate((1, 1.2)): # different brightness depending on the surface
+            self.surfs[i].fill(Palette.mult(Palette.box_outer, mult))
+            pygame.draw.rect(self.surfs[i], Palette.mult(Palette.box_sep, mult), Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
+            pygame.draw.rect(self.surfs[i], Palette.mult(Palette.box_inner, mult), Rect(m, m, s - m*2, s - m*2))
 
         # if image, resize it and add it to the surface
         if image is not None:
@@ -242,13 +250,21 @@ class Point(GraphObject):
             if w > h: w, h = 50, 50*h/w
             else: w, h = 50*w/h, 50
 
-            self.surf.blit(pygame.transform.scale(image.surf, (w, h)), (0, 0))
+            image = pygame.transform.scale(image.surf, (w, h)), (0, 0)
+            self.surfs[0].blit(image)
+            self.surfs[1].blit(image)
 
-    def set_rank(self):
-        self.size = Point.get_rank_size(self.rank)
+    def set_rank(self, rank):
+        self.rank = rank
+        self.size = Point.get_rank_size(rank)
         self.set_image(self.image)
 
+        # update points sizes
+        for links in Manager.links:
+            links.update_rank()
+
     def collide(self, pos):
+        """Checks if the given position in screen coordinates intersects with the point"""
         x, y = graph.get_pos(self.x, self.y)
         s = self.size/2
         return x-s < pos[0] < x+s and y-s < pos[1] < y+s
@@ -256,23 +272,38 @@ class Point(GraphObject):
     def update(self, events):
         x, y = graph.get_pos(self.x, self.y)
 
-        screen.blit(self.surf, (x - self.size/2, y - self.size/2))
+        # use a different texture when hovered
+        i = self.collide(pygame.mouse.get_pos())
+        screen.blit(self.surfs[i], (x - self.size/2, y - self.size/2))
 
 class Link(GraphObject):
     """Link between two points in the graph"""
     def __init__(self, p1, p2, id):
         self.id = id
-        self.strength = 5
 
         # linked points
         self.p1 = p1
         self.p2 = p2 # can be None if just created
 
+        self.update_rank() # set self.rank and self.size
+
+    @staticmethod
+    def get_rank_size(rank):
+        """Returns the size from a particular link rank, handles incorrect values"""
+        sizes = [2, 3, 5, 8, 15]
+        rank = min(max(rank, 0), len(sizes)-1)
+        return sizes[rank]
+
+    def update_rank(self):
+        """Triggered for all links when a point changes rank, to update their rank"""
+        self.rank = max(self.p1.rank, self.p2.rank)
+        self.size = Link.get_rank_size(self.rank)
+
     def update(self, events):
         pos1 = graph.get_pos(self.p1.x, self.p1.y)
         if self.p2 is None: pos2 = pygame.mouse.get_pos()
         else: pos2 = graph.get_pos(self.p2.x, self.p2.y)
-        pygame.draw.line(screen, Palette.link, pos1, pos2, self.strength)
+        pygame.draw.line(screen, Palette.link, pos1, pos2, self.size)
 
 class Image:
     """Pygame surface loaded from image file"""

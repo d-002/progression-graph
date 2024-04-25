@@ -209,7 +209,7 @@ class Manager:
     @staticmethod
     def attach_text(point_id, text):
         """Sets the text of a point"""
-        points[int(point_id)].set_text(text)
+        points[int(point_id)].set_text(None if text == '' else text)
 
     @staticmethod
     def reset():
@@ -235,7 +235,7 @@ class Point(GraphObject):
         self.y = y
         self.id = id
 
-        self.text = ''
+        self.text = None
         self.text_surf = None # rendered pygame font, None for no text
         self.image = None # image, None for no image
 
@@ -253,7 +253,7 @@ class Point(GraphObject):
     def set_text(self, text):
         """Sets the point's text and updates its text Surface"""
         self.text = text
-        self.text_surf = None if text == '' else font.render(text, True, Palette.text)
+        self.text_surf = None if text is None else font.render(text, True, Palette.text)
 
     def set_image(self, image):
         """Sets and resizes self.surfs depending on self.size"""
@@ -350,10 +350,14 @@ class UI:
     """UI elements on top of the screen: help, info about selection"""
     def __init__(self):
         self.surf = pygame.Surface((Graph.W, 40), SRCALPHA) # blitted, cached surface
-        self.text = [
-            'P: new point, S: save file, O: open file, I: load image, Z: reset zoom',
-            'L: start link, I: add image, T: add text, Del: delete point, Z: cycle rank'
-        ]
+        self.text = ['P: new point, S: save file, O: open file, I: load image, Z: reset zoom']
+        # edit texts to discriminate between deleting a point, its image or its text
+        text = 'L: start link, I: add image, T: add text, Del: %s, Z: cycle rank'
+        self.text.append(text %'delete point')
+        self.text.append(text %"delete the point's text")
+        self.text.append(text %"delete the point's image")
+
+        # transform the texts into text surfaces
         self.text = [font.render(text, True, Palette.text) for text in self.text]
 
     def update_surf(self):
@@ -363,7 +367,8 @@ class UI:
         if graph.selection is None:
             self.surf.blit(self.text[0], (12, 12))
         elif type(graph.selection) == Point:
-            self.surf.blit(self.text[1],(12, 12))
+            i = 3 if graph.selection.image is not None else 2 if graph.selection.text is not None else 1
+            self.surf.blit(self.text[i], (12, 12))
 
     def update(self):
         self.surf.set_alpha(100 if pygame.mouse.get_pos()[1] < 40 else 255)
@@ -478,7 +483,7 @@ class Graph:
         content += ('', '# TEXT')
         for id, point in Manager.points.items():
             if point.text != '':
-                content.append('At %d %d' %(id, point.text.id))
+                content.append('At %d %d' %(id, '' if point.text is None else point.text))
 
         # save into file
         with open(self.save_file, 'w') as f: f.write('\n'.join(content))
@@ -595,14 +600,20 @@ class Graph:
                     elif event.key == K_r:
                         self.selection.set_rank((self.selection.rank+1)%Point.N_RANKS)
                     elif event.key == K_DELETE:
-                        to_delete = [] # links that connect to the deleted point
-                        for id, link in Manager.links.items():
-                            if link.p1 == self.selection or link.p2 == self.selection:
-                                to_delete.append(id)
-                        del Manager.points[self.selection.id]
-                        for link in to_delete:
-                            del Manager.links[link]
-                        self.select(None)
+                        if self.selection.image is not None:
+                            self.selection.set_image(None)
+                        elif self.selection.text is not None:
+                            self.selection.set_text(None)
+                        else:
+                            to_delete = [] # links that connect to the deleted point
+                            for id, link in Manager.links.items():
+                                if link.p1 == self.selection or link.p2 == self.selection:
+                                    to_delete.append(id)
+                            del Manager.points[self.selection.id]
+                            for link in to_delete:
+                                del Manager.links[link]
+                            self.selection = None
+                        self.select(self.selection) # update self.ui
 
         if self.drag_start is not None:
             x, y = self.drag_start

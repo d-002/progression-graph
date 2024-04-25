@@ -33,7 +33,6 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 - `# comment`: comment
 
 ## TODO
-- Delete image, then text, then point
 - Escape to exit popups
 - points text
 - Be more generous for displaying visible objects

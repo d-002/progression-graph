@@ -226,6 +226,10 @@ class GraphObject:
 
 class Point(GraphObject):
     """Point in the graph, can be attached to various links and have text and an image"""
+    N_RANKS = 5
+    rank_sizes = [40, 50, 60, 80, 100]
+    assert len(rank_sizes) == N_RANKS
+
     def __init__(self, x, y, rank, id):
         self.x = x
         self.y = y
@@ -243,9 +247,8 @@ class Point(GraphObject):
     @staticmethod
     def get_rank_size(rank):
         """Returns the size from a particular point rank, handles incorrect values"""
-        sizes = [20, 30, 50, 80]
-        rank = min(max(rank, 0), len(sizes)-1)
-        return sizes[rank]
+        rank = min(max(rank, 0), Point.N_RANKS-1)
+        return Point.rank_sizes[rank]
 
     def set_text(self, text):
         """Sets the point's text and updates its text Surface"""
@@ -293,6 +296,7 @@ class Point(GraphObject):
         return x-s < pos[0] < x+s and y-s < pos[1] < y+s
 
     def update(self, events):
+        """Called by grah update() each frame"""
         x, y = graph.get_pos(self.x, self.y)
 
         # use a different texture when hovered
@@ -301,6 +305,10 @@ class Point(GraphObject):
 
 class Link(GraphObject):
     """Link between two points in the graph"""
+
+    rank_sizes = [2, 3, 5, 8, 15]
+    assert len(rank_sizes) == Point.N_RANKS
+
     def __init__(self, p1, p2, id):
         self.id = id
 
@@ -313,9 +321,8 @@ class Link(GraphObject):
     @staticmethod
     def get_rank_size(rank):
         """Returns the size from a particular link rank, handles incorrect values"""
-        sizes = [2, 3, 5, 8, 15]
-        rank = min(max(rank, 0), len(sizes)-1)
-        return sizes[rank]
+        rank = min(max(rank, 0), Point.N_RANKS-1)
+        return Link.rank_sizes[rank]
 
     def update_rank(self):
         """Triggered for all links when a point changes rank, to update their rank"""
@@ -325,6 +332,7 @@ class Link(GraphObject):
         self.size = Link.get_rank_size(self.rank)
 
     def update(self, events):
+        """Called by grah update() each frame"""
         pos1 = graph.get_pos(self.p1.x, self.p1.y)
         if self.p2 is None: pos2 = pygame.mouse.get_pos()
         else: pos2 = graph.get_pos(self.p2.x, self.p2.y)
@@ -343,8 +351,8 @@ class UI:
     def __init__(self):
         self.surf = pygame.Surface((Graph.W, 40), SRCALPHA) # blitted, cached surface
         self.text = [
-            'P: new point, S: save file, O: open file, I: load image',
-            'L: start link, I: add image, T: add text, Del: delete image+text'
+            'P: new point, S: save file, O: open file, I: load image, Z: reset zoom',
+            'L: start link, I: add image, T: add text, Del: delete point, Z: cycle rank'
         ]
         self.text = [font.render(text, True, Palette.text) for text in self.text]
 
@@ -584,6 +592,8 @@ class Graph:
                         if image is not None: self.selection.set_image(image)
                     elif event.key == K_t:
                         pass
+                    elif event.key == K_r:
+                        self.selection.set_rank((self.selection.rank+1)%Point.N_RANKS)
                     elif event.key == K_DELETE:
                         to_delete = [] # links that connect to the deleted point
                         for id, link in Manager.links.items():

@@ -22,6 +22,8 @@ Options will appear on top of the screen dependoing on the selection. Hit the co
 
 Zoom in and out with mouse scrolling, reset zoom with z.
 
+Pressing Delete will detach the image from a point, or remove its text, or delete the point
+
 ## Save files format
 - `P x y r id`: creates a new point at coordinates (x, y), of rank r and with ID *id*
 - `L p1 p2 id`: creates a new link with ID *id*, attached to points of IDs *p1* and *p2*. These points should have been created before.
@@ -31,8 +33,7 @@ Zoom in and out with mouse scrolling, reset zoom with z.
 - `# comment`: comment
 
 ## TODO
-- Change rank with key, update ui
-- ui Z
+- Delete image, then text, then point
 - Escape to exit popups
 - points text
 - Be more generous for displaying visible objects

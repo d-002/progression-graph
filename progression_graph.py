@@ -236,13 +236,13 @@ class Point(GraphObject):
         self.id = id
 
         self.text = None
-        self.text_surf = None # rendered pygame font, None for no text
         self.image = None # image, None for no image
 
-        self.surf = None # should always contain the surface with the right size
-        self.size = None # should contain the size according to self.rank
+        self._surf = None # should always contain the surface with the right size
+        self._text_surf = None # rendered pygame font, None for no text
+        self._size = None # should contain the size according to self.rank
 
-        self.set_rank(rank) # init self.rank, self.size and self.surf
+        self.set_rank(rank) # init self.rank, self.size and self.surfs
 
     @staticmethod
     def get_rank_size(rank):
@@ -250,24 +250,33 @@ class Point(GraphObject):
         rank = min(max(rank, 0), Point.N_RANKS-1)
         return Point.rank_sizes[rank]
 
+    def set_rank(self, rank):
+        self.rank = rank
+        self._size = Point.get_rank_size(rank)
+        self.set_image(self.image)
+
+        # update points sizes
+        for link in Manager.links.values():
+            link.update_rank()
+
     def set_text(self, text):
         """Sets the point's text and updates its text Surface"""
         self.text = text
-        self.text_surf = None if text is None else font.render(text, True, Palette.text)
+        self._text_surf = None if text is None else font.render(text, True, Palette.text)
 
     def set_image(self, image):
         """Sets and resizes self.surfs depending on self.size"""
-        s = self.size
+        s = self._size
         self.image = image
-        self.surfs = [pygame.Surface((s, s)), pygame.Surface((s, s))]
+        self._surfs = [pygame.Surface((s, s)), pygame.Surface((s, s))]
 
         # draw empty box
-        m = int(self.size/10) # outline margin
+        m = int(self._size/10) # outline margin
         if m > 5: m = 5
         for i, mult in enumerate((1, 1.2)): # different brightness depending on the surface
-            self.surfs[i].fill(Palette.mult(Palette.box_outer, mult))
-            pygame.draw.rect(self.surfs[i], Palette.mult(Palette.box_sep, mult), Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
-            pygame.draw.rect(self.surfs[i], Palette.mult(Palette.box_inner, mult), Rect(m, m, s - m*2, s - m*2))
+            self._surfs[i].fill(Palette.mult(Palette.box_outer, mult))
+            pygame.draw.rect(self._surfs[i], Palette.mult(Palette.box_sep, mult), Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
+            pygame.draw.rect(self._surfs[i], Palette.mult(Palette.box_inner, mult), Rect(m, m, s - m*2, s - m*2))
 
         # if image, resize it and add it to the surface
         if image is not None:
@@ -277,22 +286,13 @@ class Point(GraphObject):
             else: w, h = s*w/h, s
 
             image = pygame.transform.scale(image.surf, (w, h))
-            self.surfs[0].blit(image, (m+1, m+1))
-            self.surfs[1].blit(image, (m+1, m+1))
-
-    def set_rank(self, rank):
-        self.rank = rank
-        self.size = Point.get_rank_size(rank)
-        self.set_image(self.image)
-
-        # update points sizes
-        for link in Manager.links.values():
-            link.update_rank()
+            self._surfs[0].blit(image, (m+1, m+1))
+            self._surfs[1].blit(image, (m+1, m+1))
 
     def collide(self, pos):
         """Checks if the given position in screen coordinates intersects with the point"""
         x, y = graph.get_pos(self.x, self.y)
-        s = self.size/2
+        s = self._size/2
         return x-s < pos[0] < x+s and y-s < pos[1] < y+s
 
     def update(self, events):
@@ -301,7 +301,7 @@ class Point(GraphObject):
 
         # use a different texture when hovered
         i = self.collide(pygame.mouse.get_pos()) or self == graph.selection
-        screen.blit(self.surfs[i], (x - self.size/2, y - self.size/2))
+        screen.blit(self._surfs[i], (x - self._size/2, y - self._size/2))
 
 class Link(GraphObject):
     """Link between two points in the graph"""
@@ -329,14 +329,14 @@ class Link(GraphObject):
         if self.p2 is None: self.rank = self.p1.rank
         else: self.rank = max(self.p1.rank, self.p2.rank)
 
-        self.size = Link.get_rank_size(self.rank)
+        self._size = Link.get_rank_size(self.rank)
 
     def update(self, events):
         """Called by grah update() each frame"""
         pos1 = graph.get_pos(self.p1.x, self.p1.y)
         if self.p2 is None: pos2 = pygame.mouse.get_pos()
         else: pos2 = graph.get_pos(self.p2.x, self.p2.y)
-        pygame.draw.line(screen, Palette.link, pos1, pos2, self.size)
+        pygame.draw.line(screen, Palette.link, pos1, pos2, self._size)
 
 class Image:
     """Pygame surface loaded from image file"""
@@ -644,6 +644,7 @@ screen = pygame.display.set_mode((Graph.W, Graph.H))
 pygame.display.set_caption('Progression graph')
 font = pygame.font.SysFont('consolas', 16)
 clock = pygame.time.Clock()
+ticks = pygame.time.get_ticks
 
 graph = Graph()
 graph.open('test_save.txt')
@@ -661,4 +662,3 @@ while run:
     dt = clock.tick(FPS)/1000
 
 pygame.quit()
-quit()

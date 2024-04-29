@@ -15,17 +15,29 @@ class Palette:
     neutral = (80, 80, 85)
     red = (255, 0, 0)
 
-    box_outer = (90, 90, 90)
-    box_sep = (50, 50, 50)
-    box_inner = (130, 130, 130)
+    # States base colors. Points and links colors are derived from them
+    _states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
+
+    link = [None]*3 # contains a nested list: [[todo normal, todo hovered, todo selected], [doing], [completed]]
+    # same for box colors
+    box_outer = [None]*3
+    box_sep = [None]*3
+    box_inner = [None]*3
 
     init = False # to make sure Palette is init
 
     @staticmethod
     def __init__():
         Palette.init = True
-        col = (0, 255, 0)
-        Palette.link = [col, Palette.mult(col, 0.6, 127), Palette.mult(col, 0.3, 192)]
+
+        for i, col in enumerate(Palette._states):
+            # init link colors
+            Palette.link[i] = (col, Palette.mult(col, 0.6, 127), Palette.mult(col, 0.3, 192))
+
+            # init point colors
+            Palette.box_outer[i] = (Palette.mult(col, 0.4, 50), Palette.mult(col, 0.4, 60), Palette.mult(col, 0.4, 80))
+            Palette.box_sep[i] = (Palette.mult(col, 0.2, 0), Palette.mult(col, 0.2, 20), Palette.mult(col, 0.2, 40))
+            Palette.box_inner[i] = (Palette.mult(col, 0.3, 100), Palette.mult(col, 0.3, 120), Palette.mult(col, 0.3, 150))
 
     @staticmethod
     def mult(col, x, add=0):
@@ -243,6 +255,7 @@ class Point(GraphObject):
     def __init__(self, x, y, rank, id):
         self.x = x
         self.y = y
+        self.state = 0
         self.id = id
 
         self.text = None
@@ -267,9 +280,22 @@ class Point(GraphObject):
         self._size = Point.get_rank_size(rank)
         self.set_image(self.image)
 
-        # update points sizes
+        # update attached links
         for link in Manager.links.values():
-            link.update_rank()
+            if self == link.p1 or self == link.p2:
+                link.refresh()
+
+    def cycle_rank(self):
+        self.set_rank((self.rank+1) % Point.N_RANKS)
+
+    def cycle_state(self):
+        # order: todo, completed, doing
+        self.state = (self.state-1) % 3
+        self.set_image(self.image) # update self._surf
+
+        for link in Manager.links.values():
+            if self == link.p1 or self == link.p2:
+                link.refresh()
 
     @staticmethod
     def black_back(surf):
@@ -336,15 +362,17 @@ class Point(GraphObject):
         """Sets and resizes self.surfs depending on self.size"""
         s = self._size
         self.image = image
-        self._surfs = [pygame.Surface((s, s)), pygame.Surface((s, s))]
+        self._surfs = [None]*3
 
         # draw empty box
         m = int(self._size/10) # outline margin
         if m > 5: m = 5
-        for i, mult in enumerate((1, 1.2)): # different brightness depending on the surface
-            self._surfs[i].fill(Palette.mult(Palette.box_outer, mult))
-            pygame.draw.rect(self._surfs[i], Palette.mult(Palette.box_sep, mult), Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
-            pygame.draw.rect(self._surfs[i], Palette.mult(Palette.box_inner, mult), Rect(m, m, s - m*2, s - m*2))
+
+        for i in range(3): # set normal, hovered, and selected surfaces
+            self._surfs[i] = pygame.Surface((s, s))
+            self._surfs[i].fill(Palette.box_outer[self.state][i])
+            pygame.draw.rect(self._surfs[i], Palette.box_sep[self.state][i], Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
+            pygame.draw.rect(self._surfs[i], Palette.box_inner[self.state][i], Rect(m, m, s - m*2, s - m*2))
 
         # if image, resize it and add it to the surface
         if image is not None:
@@ -354,8 +382,8 @@ class Point(GraphObject):
             else: w, h = s*w/h, s
 
             image = pygame.transform.scale(image.surf, (w, h))
-            self._surfs[0].blit(image, (m+1, m+1))
-            self._surfs[1].blit(image, (m+1, m+1))
+            for i in range(3):
+                self._surfs[i].blit(image, (m+1, m+1))
 
     def collide(self, pos):
         """Checks if the given position in screen coordinates intersects with the point"""
@@ -368,7 +396,7 @@ class Point(GraphObject):
         x, y = graph.get_pos(self.x, self.y)
 
         # use a different texture when hovered
-        i = self.collide(pygame.mouse.get_pos()) or self == graph.selection
+        i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
         screen.blit(self._surfs[i], (x - self._size/2, y - self._size/2))
 
         # draw text
@@ -389,7 +417,7 @@ class Link(GraphObject):
         self.p1 = p1
         self.p2 = p2 # can be None if just created
 
-        self.update_rank() # set self.rank and self.size
+        self.refresh() # set self.rank, self.size and self._state
 
     @staticmethod
     def get_rank_size(rank):
@@ -397,12 +425,15 @@ class Link(GraphObject):
         rank = min(max(rank, 0), Point.N_RANKS-1)
         return Link.rank_sizes[rank]
 
-    def update_rank(self):
-        """Triggered for all links when a point changes rank, to update their rank"""
+    def refresh(self):
+        """Triggered for all links when a point changes rank or state, to update the link's properties"""
         if self.p2 is None: self.rank = self.p1.rank
         else: self.rank = max(self.p1.rank, self.p2.rank)
 
         self._size = Link.get_rank_size(self.rank)
+
+        if self.p2 is None: self._state = self.p1.state
+        else: self._state = max(self.p1.state, self.p2.state)
 
     def collide(self, mpos):
         """Checks if the link collides with the mouse, with self._size tolerance.
@@ -456,7 +487,7 @@ class Link(GraphObject):
 
         # get color depending on if the link is hovered/selected
         i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
-        col = Palette.link[i]
+        col = Palette.link[self._state][i]
         pygame.draw.line(screen, col, pos1, pos2, self._size)
 
 class Image:
@@ -474,10 +505,10 @@ class UI:
         self.text = ['P: new point, S: save file, O: open file, I: load image, Z: reset zoom',
                      'Del: delete link']
         # edit texts to discriminate between deleting a point, its image or its text
-        text = 'L: start link, I: add image, T: add text, Del: %s, Z: cycle rank'
-        self.text.append(text %'delete point')
-        self.text.append(text %"delete the point's text")
-        self.text.append(text %"delete the point's image")
+        text = 'L: start link, I: add image, T: add text, Del: delete %s, R: cycle rank, C: cycle state'
+        self.text.append(text %'point')
+        self.text.append(text %"text")
+        self.text.append(text %"image")
 
         # transform the texts into text surfaces
         self.text = [font.render(text, True, Palette.text) for text in self.text]
@@ -753,7 +784,9 @@ class Graph:
                         if text is not None:
                             self.selection.set_text(text)
                     elif event.key == K_r:
-                        self.selection.set_rank((self.selection.rank+1)%Point.N_RANKS)
+                        self.selection.cycle_rank()
+                    elif event.key == K_c:
+                        self.selection.cycle_state()
                     elif event.key == K_DELETE:
                         if self.selection.image is not None:
                             self.selection.set_image(None)

@@ -14,6 +14,7 @@ Progression graph tool for games
 - Points can have different ranks, determining their size
 - Save and open intuitively formatted files
 - Visualize the tree, export into png file
+- Points have a state: to do, doing, completed, with different colors. You can cycle them with c while selected, and their state updates the connected links. This allows to keep track of the project's state easily.
 
 ## Controls
 Click on an object to select it, hit Enter or Escape to unselect it. Escape can also be used to cancel creating a link.
@@ -34,9 +35,8 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 
 ## TODO
 - Escape to exit popups
-- Select and delete links
-- Link selection feedback
-- Points states and colors + for links + edit readme
+- Handle save for states, edit readme, fix save
+- File selector for images
 - Be more generous for displaying visible objects
 - Only save used images
 - Trigger quit next frame when input returns None
@@ -44,7 +44,6 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 - Message boxes, error when failed to load image
 - Don't allow spaces in images: rename? replace?
 - Cancel button in popups
-- File selector for images?
 - Save files, in zip?
 - upload to png, transparent background option
 - Change point and links ranks

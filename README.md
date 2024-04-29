@@ -34,12 +34,10 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 - `# comment`: comment
 
 ## TODO
-- Be more generous for displaying visible objects
 - Scroll position and zoom in save file
-- File selector for images
 - Button class
+- Message boxes, quit with enter if only one button, else choose and return result in parameters
 - Cancel button in popups
-- Message boxes, error when failed to load image
 - Message box save before quit?
 - Zip file for save, copy images in it. Delete them if not used
 - Upload to png, transparent background option. Image with margin around elements, zoom 1

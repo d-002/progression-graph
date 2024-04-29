@@ -4,58 +4,11 @@ from math import sqrt
 from os.path import exists, splitext, basename
 from pygame.locals import *
 
-def syntax_error(y, expression):
-    """Used to help handling file parsing errors"""
-    raise SyntaxError('Could not parse save file at line %d: "%s"' %(y+1, expression))
+from tkinter import Tk
+from tkinter.filedialog import askopenfilename
 
-class Palette:
-    """Static class, used to store colors data"""
-    text = (255, 255, 255)
-    background = (40, 40, 43)
-    neutral = (80, 80, 85)
-    red = (255, 0, 0)
-
-    # States base colors. Points and links colors are derived from them
-    _states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
-
-    link = [None]*3 # contains a nested list: [[todo normal, todo hovered, todo selected], [doing], [completed]]
-    # same for box colors
-    box_outer = [None]*3
-    box_sep = [None]*3
-    box_inner = [None]*3
-
-    init = False # to make sure Palette is init
-
-    @staticmethod
-    def __init__():
-        Palette.init = True
-
-        for i, col in enumerate(Palette._states):
-            # init link colors
-            Palette.link[i] = (col, Palette.mult(col, 0.6, 127), Palette.mult(col, 0.3, 192))
-
-            # init point colors
-            Palette.box_outer[i] = (Palette.mult(col, 0.4, 50), Palette.mult(col, 0.4, 60), Palette.mult(col, 0.4, 80))
-            Palette.box_sep[i] = (Palette.mult(col, 0.2, 0), Palette.mult(col, 0.2, 20), Palette.mult(col, 0.2, 40))
-            Palette.box_inner[i] = (Palette.mult(col, 0.3, 100), Palette.mult(col, 0.3, 120), Palette.mult(col, 0.3, 150))
-
-    @staticmethod
-    def mult(col, x, add=0):
-        """Changes the exposition of a color: x=1 does nothing, x=0 is black, and colors are clamped.
-        You can also specify add, an offset applied to all the color's components.
-
-        Warning: only supports RGB colors"""
-
-        if x == 1 and not add: return col
-
-        r, g, b = col[0]*x + add, col[1]*x + add, col[2]*x + add
-        return (255 if r > 255 else r, 255 if g > 255 else g, 255 if b > 255 else b)
-Palette.__init__()
-
-def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
-    """Input box, freezes other actions to ask for user value.
-    Param cast: function used to check for input format
-    Param check: lambda used to check if the entry value is valid"""
+def get_popup_bg(message):
+    """Creates the base for a popup. Returns the created background from a message string."""
 
     # make a darkened background from the current screen state
     dark = pygame.Surface((Graph.W, Graph.H), SRCALPHA)
@@ -68,6 +21,16 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     pygame.draw.rect(background, Palette.background, Rect((Graph.W*0.2, Graph.H*0.2, Graph.W*0.6, Graph.H*0.6)))
     text = font.render(message, True, Palette.text)
     background.blit(text, (Graph.W/2 - text.get_width()/2, Graph.H*0.3))
+
+    return background
+
+def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
+    """Input box, freezes other actions to ask for user value.
+    Param cast: function used to check for input format
+    Param check: lambda used to check if the entry value is valid"""
+
+    # get base popup
+    background = get_popup_bg(message)
 
     # init error text
     error_text = [font.render("Error: can't decode value", True, Palette.red),
@@ -123,6 +86,20 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
         clock.tick(FPS)
 
     return cast(string)
+
+def import_image():
+    # create an invisible window to prevent seeing one on popup opening
+    tk = Tk()
+    tk.wm_attributes('-alpha', 0)
+    files = askopenfilename(title='Import image(s)', filetypes=(('Image files', ('png', 'jpg', 'bmp', 'gif')),), multiple=True)
+    tk.destroy()
+
+    if type(files) == tuple and len(files): # double protection in case API changes
+        for file in files:
+            try:
+                Manager.new_image(file)
+            except:
+                print('Error loading image')
 
 def image_selector():
     """Graphical image selector, displays all loaded images into a grid for the user to select"""
@@ -182,6 +159,66 @@ def image_selector():
 
     if selection is None: return
     return Manager.images[ids[selection]]
+
+class Error:
+    """Static class, used to make handling exceptions easier
+    TODO: add buttons to create popups"""
+
+    @staticmethod
+    def syntax(y, expression):
+        """Used to help handling file parsing errors"""
+        raise SyntaxError('Could not parse save file at line %d: "%s"\nAborting file loading' %(y+1, expression))
+
+    @staticmethod
+    def corrupted_file(comment):
+        """Used when a non-critical file parsing error has been found. This doesn't interrupt file loading."""
+        print('Corrupted file: %s\nThe will will still be loaded, but check error-related changes before saving.' %comment)
+        #raise SyntaxError('Corrupted file: %s\nThe will will still be loaded, but check error-related changes before saving.' %comment)
+
+class Palette:
+    """Static class, used to store colors data"""
+    text = (255, 255, 255)
+    background = (40, 40, 43)
+    neutral = (80, 80, 85)
+    red = (255, 0, 0)
+
+    # States base colors. Points and links colors are derived from them
+    _states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
+
+    link = [None]*3 # contains a nested list: [[todo normal, todo hovered, todo selected], [doing], [completed]]
+    # same for box colors
+    box_outer = [None]*3
+    box_sep = [None]*3
+    box_inner = [None]*3
+
+    init = False # to make sure Palette is init
+
+    @staticmethod
+    def __init__():
+        Palette.init = True
+
+        for i, col in enumerate(Palette._states):
+            # init link colors
+            Palette.link[i] = (col, Palette.mult(col, 0.6, 127), Palette.mult(col, 0.3, 192))
+
+            # init point colors
+            Palette.box_outer[i] = (Palette.mult(col, 0.4, 50), Palette.mult(col, 0.4, 60), Palette.mult(col, 0.4, 80))
+            Palette.box_sep[i] = (Palette.mult(col, 0.2, 0), Palette.mult(col, 0.2, 20), Palette.mult(col, 0.2, 40))
+            Palette.box_inner[i] = (Palette.mult(col, 0.3, 100), Palette.mult(col, 0.3, 120), Palette.mult(col, 0.3, 150))
+
+    @staticmethod
+    def mult(col, x, add=0):
+        """Changes the exposition of a color: x=1 does nothing, x=0 is black, and colors are clamped.
+        You can also specify add, an offset applied to all the color's components.
+
+        Warning: only supports RGB colors"""
+
+        if x == 1 and not add: return col
+
+        r, g, b = col[0]*x + add, col[1]*x + add, col[2]*x + add
+        return (255 if r > 255 else r, 255 if g > 255 else g, 255 if b > 255 else b)
+
+Palette.__init__()
 
 class Manager:
     """Manager for all objects. Should be used to create and remove new objects, as it manages the ID system."""
@@ -510,7 +547,7 @@ class UI:
     """UI elements on top of the screen: help, info about selection"""
     def __init__(self):
         self.surf = pygame.Surface((Graph.W, 40), SRCALPHA) # blitted, cached surface
-        self.text = ['P: new point, S: save file, O: open file, I: load image, Z: reset zoom',
+        self.text = ['P: new point, S: save file, O: open save file, I: import image, Z: reset zoom, Q: quit',
                      'Del: delete link']
         # edit texts to discriminate between deleting a point, its image or its text
         text = 'L: start link, I: add image, T: add text, Del: delete %s, R: cycle rank, C: cycle state'
@@ -521,11 +558,15 @@ class UI:
         # transform the texts into text surfaces
         self.text = [font.render(text, True, Palette.text) for text in self.text]
 
-    def update_surf(self):
-        """Updates cached Surface: redraws background, adds elements depending on selection"""
+        self.update_surf(True)
+
+    def update_surf(self, init=False):
+        """Updates cached Surface: redraws background, adds elements depending on selection.
+        If init is True (should be set to True only on init), graph is assumed to not exist."""
+
         pygame.draw.rect(self.surf, Palette.neutral, Rect((0, 0), (Graph.W, 40)))
 
-        if graph.selection is None:
+        if init or graph.selection is None:
             self.surf.blit(self.text[0], (12, 12))
         elif type(graph.selection) == Link:
             self.surf.blit(self.text[1], (12, 12))
@@ -590,21 +631,12 @@ class Graph:
 
     def open(self, save_file):
         """Sets self.save_file and loads save file"""
-        self.save_file = save_file
-        
-        # reset variables
-        self.drag_start = None
-        self.drag_mouse_start = None
-        self.selection = None
-        self.hovered = None
-        self.hovered_l = None
-        self.link = None
-        self.ui.update_surf()
 
+        # make a backup in case something goes wrong and the file fails to open
+        backup = [dict(Manager.points), dict(Manager.links), dict(Manager.images)]
         Manager.reset()
 
-        # TODO: handle deletion of old objects
-
+        success = True
         with open(save_file) as f: lines = f.read().split('\n')
         for y, raw in enumerate(lines):
             # format line: remove leading and trailing spaces, double spaces, comments
@@ -626,21 +658,57 @@ class Graph:
             # execute action depending on command
             match cmd:
                 case 'P': # add new point
-                    if len(args) != 5: syntax_error(y, raw)
+                    if len(args) != 5: Error.syntax(y, raw)
                     Manager.new_point(*args)
                 case 'L': # add new link
-                    if len(args) != 3: syntax_error(y, raw)
+                    if len(args) != 3: Error.syntax(y, raw)
                     Manager.new_link(*args)
                 case 'I': # add new image
-                    if len(args) != 2: syntax_error(y, raw)
-                    Manager.new_image(*args)
+                    if len(args) != 2: Error.syntax(y, raw)
+                    try:
+                        Manager.new_image(*args)
+                    except:
+                        Error.corrupted_file(args[0]+' not found')
+                        success = False
                 case 'Ai': # attach an image to a point
-                    if len(args) != 2: syntax_error(y, raw)
-                    Manager.attach_image(*args)
+                    if len(args) != 2: Error.syntax(y, raw)
+                    try:
+                        Manager.attach_image(*args)
+                    except:
+                        Error.corrupted_file('could not attach image of ID '+args[1])
+                        success = False
                 case 'At': # attach text to a point
-                    if len(args) != 2: syntax_error(y, raw)
-                    Manager.attach_text(*args)
-                case _: syntax_error(y, raw)
+                    if len(args) != 2: Error.syntax(y, raw)
+                    try:
+                        Manager.attach_text(*args)
+                    except:
+                        Error.corrupted_file('error while attaching text')
+                        success = False
+                case _: Error.syntax(y, raw)
+
+        if success:
+            self.open_successful(save_file)
+            for d in backup: del d
+        else:
+            # unload the objects and restore the previous ones
+            # manually deleting makes for less memory usage
+            del Manager.links
+            del Manager.images
+            del Manager.points # points last because then they no longer have any references
+            Manager.points, Manager.links, Manager.images = backup
+
+    def open_successful(self, save_file):
+        """If opening a file was successful, prepare graph (reset variables)"""
+        self.save_file = save_file
+        
+        # reset variables
+        self.drag_start = None
+        self.drag_mouse_start = None
+        self.selection = None
+        self.hovered = None
+        self.hovered_l = None
+        self.link = None
+        self.ui.update_surf()
 
     def save(self):
         """Saves graph contents into self.save_file"""
@@ -772,6 +840,10 @@ class Graph:
             # keys
             elif event.type == KEYDOWN:
                 if event.key == K_z: self.zoom = 1
+                elif event.key == K_q:
+                    if quit_app():
+                        return
+
                 elif event.key == K_ESCAPE:
                     if self.link is None:
                         # unselect by hitting Escape
@@ -780,8 +852,10 @@ class Graph:
                         # or undo the creation of a new link
                         del Manager.links[self.link.id]
                         self.link = None
+
                 elif event.key == K_RETURN and self.link is None:
                     self.select(None)
+
                 elif self.selection is None:
                     if event.key == K_p:
                         Manager.new_point(*self.from_pos(*mpos), 0)
@@ -791,8 +865,8 @@ class Graph:
                         path = ask_input_box('Enter save file', str, lambda s: exists(s))
                         if path is not None: self.open(path)
                     elif event.key == K_i:
-                        path = ask_input_box('Enter valid image path:', str, check=lambda s: exists(s))
-                        if path is not None: Manager.new_image(path)
+                        import_image()
+
                 elif type(self.selection) == Point:
                     if event.key == K_l and self.link is None:
                         self.link = Manager.new_link(self.selection.id, None)
@@ -823,6 +897,7 @@ class Graph:
                                 del Manager.links[link]
                             self.selection = None
                         self.select(self.selection) # update self.ui
+
                 elif type(self.selection) == Link:
                     if event.key == K_DELETE:
                         del Manager.links[self.selection.id]
@@ -856,6 +931,14 @@ class Graph:
             screen.blit(self._debug_surf, (0, 0))
             self._debug_surf = None
 
+def quit_app():
+    """Displays a save and quit? popup if made changes [TODO].
+    Returns True if the window should be closed, otherwise False."""
+
+    global run
+    run = False
+    return True
+
 FPS = 60
 pygame.init()
 
@@ -879,7 +962,8 @@ while run:
     # handle pygame event loop
     events = pygame.event.get()
     for event in events:
-        if event.type == QUIT: run = False
+        if event.type == QUIT:
+            quit_app()
 
     graph.update(events)
     pygame.display.flip()

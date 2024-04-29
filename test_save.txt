@@ -6,7 +6,7 @@ P 1.160000 -0.040000 3 0 1
 L 0 1 0
 
 # IMAGES
-I pick.png 0
+I C:/Users/PC/Pictures/textures/item/diamond.png 0
 
 # LINK IMAGES
 Ai 0 0

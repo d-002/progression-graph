@@ -231,7 +231,7 @@ class Manager:
     @staticmethod
     def attach_text(point_id, text):
         """Sets the text of a point"""
-        points[int(point_id)].set_text(None if text == '' else text)
+        Manager.points[int(point_id)].set_text(None if text == '' else text)
 
     @staticmethod
     def reset():
@@ -653,7 +653,15 @@ class Graph:
         # images
         content += ('', '# IMAGES')
         for id, image in Manager.images.items():
-            content.append('I %s %d' %(image.path, image.id))
+            # check if this image is used in the graph, otherwise don't save it
+            used = False
+            for point in Manager.points.values():
+                if point.image == image:
+                    used = True
+                    break
+            
+            if used:
+                content.append('I %s %d' %(image.path, image.id))
 
         # images attached to points
         content += ('', '# LINK IMAGES')
@@ -732,11 +740,20 @@ class Graph:
 
                 # finish adding a link
                 if type(self.selection) == Point and self.link is not None and self.link.p1 != self.selection:
-                    self.link.p2 = self.selection
-                    self.link.update_rank()
-                    self.link = None
-                    self.select(None)
-                    self.drag_start = None # prevent unwanted drag
+                    # check if no link exists between these two points
+                    exists = False
+                    for link in Manager.links.values():
+                        if (link.p1 == self.link.p1 and link.p2 == self.selection) or \
+                            (link.p2 == self.link.p1 and link.p1 == self.selection):
+                            exists = True
+                            break
+
+                    if not exists:
+                        self.link.p2 = self.selection
+                        self.link.refresh()
+                        self.link = None
+                        self.select(None)
+                        self.drag_start = None # prevent unwanted drag
 
             # stop dragging
             elif event.type == MOUSEBUTTONUP and event.button == 1:

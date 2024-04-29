@@ -35,19 +35,16 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 
 ## TODO
 - Escape to exit popups
-- File selector for images
-- Be more generous for displaying visible objects
+- Trigger quit next frame if quit in input
 - Only save used images
-- Trigger quit next frame when input returns None
-- Save before quit?
-- Message boxes, error when failed to load image
-- Don't allow spaces in images: rename? replace?
-- Cancel button in popups
-- Save files, in zip?
-- upload to png, transparent background option
-- Change point and links ranks
-- Hold shift to only edit X or Y coordinates?
-- Scroll position and zoom in save file?
-- Change images and sizes on zoom
-- Export to image with margin around elements, zoom 1
 - Handle no duplicate links
+- Be more generous for displaying visible objects
+- Scroll position and zoom in save file
+- File selector for images
+- Button class
+- Cancel button in popups
+- Message boxes, error when failed to load image
+- Message box save before quit?
+- Zip file for save, copy images in it. Delete them if not used
+- Upload to png, transparent background option. Image with margin around elements, zoom 1
+- Change images and sizes on zoom

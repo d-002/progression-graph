@@ -201,8 +201,8 @@ class Manager:
         return _dict[id]
 
     @staticmethod
-    def new_point(x, y, rank, id=None):
-        result = Manager.new_obj((float(x), float(y), int(rank)), Point, Manager.points, id)
+    def new_point(x, y, rank, state, id=None):
+        result = Manager.new_obj((float(x), float(y), int(rank), int(state)), Point, Manager.points, id)
 
         # sort points to display the more important ones on top
         keys = sorted(Manager.points.keys(), key=lambda key: Manager.points[key].rank)
@@ -252,13 +252,13 @@ class Point(GraphObject):
     rank_sizes = [40, 50, 60, 80, 100]
     assert len(rank_sizes) == N_RANKS
 
-    def __init__(self, x, y, rank, id):
+    def __init__(self, x, y, rank, state, id):
         self.x = x
         self.y = y
-        self.state = 0
+        self.state = state
         self.id = id
 
-        self.text = None
+        self.text = None # text, None for no text
         self.image = None # image, None for no image
 
         self._surf = None # should always contain the surface with the right size
@@ -401,7 +401,7 @@ class Point(GraphObject):
 
         # draw text
         if self._text_surfs is not None:
-            t = self._text_surfs[i]
+            t = self._text_surfs[bool(i)]
             screen.blit(t, (x - t.get_width()/2, y + self._size/2 + 5))
 
 class Link(GraphObject):
@@ -618,7 +618,7 @@ class Graph:
             # execute action depending on command
             match cmd:
                 case 'P': # add new point
-                    if len(args) != 4: syntax_error(y, raw)
+                    if len(args) != 5: syntax_error(y, raw)
                     Manager.new_point(*args)
                 case 'L': # add new link
                     if len(args) != 3: syntax_error(y, raw)
@@ -643,7 +643,7 @@ class Graph:
         # points
         content.append('# POINTS')
         for id, point in Manager.points.items():
-            content.append('P %s %s %d %d' %(point.x, point.y, point.rank, id))
+            content.append('P %f %f %d %d %d' %(point.x, point.y, point.rank, point.state, id))
 
         # links
         content += ('', '# LINKS')
@@ -664,11 +664,11 @@ class Graph:
         # text attached to points
         content += ('', '# TEXT')
         for id, point in Manager.points.items():
-            if point.text != '':
-                content.append('At %d %d' %(id, '' if point.text is None else point.text))
+            if point.text is not None:
+                content.append('At %d %s' %(id, point.text))
 
         # save into file
-        with open(self.save_file, 'w') as f: f.write('\n'.join(content))
+        with open(self.save_file, 'w') as f: f.write('\n'.join(content)+'\n')
 
     def get_pos(self, x, y):
         """Returns the position, in screen coordinates, corresponding to a position in graph coordinates"""
@@ -780,7 +780,8 @@ class Graph:
                         image = image_selector()
                         if image is not None: self.selection.set_image(image)
                     elif event.key == K_t:
-                        text = ask_input_box('Enter point text:', str, lambda s: len(s), self.W-20)
+                        check = lambda s: len(s) and '\n' not in s and '\r' not in s and '\t' not in s
+                        text = ask_input_box('Enter point text:', str, check, self.W-20)
                         if text is not None:
                             self.selection.set_text(text)
                     elif event.key == K_r:

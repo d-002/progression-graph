@@ -26,7 +26,7 @@ Zoom in and out with mouse scrolling, reset zoom with z.
 Pressing Delete will detach the image from a point, or remove its text, or delete the point
 
 ## Save files format
-- `P x y r id`: creates a new point at coordinates (x, y), of rank r and with ID *id*
+- `P x y r s id`: creates a new point at coordinates (x, y), of rank r, states and with ID *id*
 - `L p1 p2 id`: creates a new link with ID *id*, attached to points of IDs *p1* and *p2*. These points should have been created before.
 - `I name id`: loads an image from cached image *name* in `images/` into image object with ID *id*
 - `Ai p i`: attaches the image of ID *i* to point of ID *p*
@@ -35,7 +35,6 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 
 ## TODO
 - Escape to exit popups
-- Handle save for states, edit readme, fix save
 - File selector for images
 - Be more generous for displaying visible objects
 - Only save used images

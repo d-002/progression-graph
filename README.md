@@ -39,3 +39,4 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 - Zip file faster load/save: use diff
 - Change images and sizes on zoom
 - Unselect when exporting
+- Resize window, UI auto word wrap, min size 640\*480?

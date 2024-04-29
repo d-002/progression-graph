@@ -999,11 +999,8 @@ class Graph:
         set_title(self.save_file)
 
     def newfile(self):
-        del Manager.links
-        del Manager.images
-        del Manager.points
-        Manager.points, Manager.links, Manager.images = {}, {}, {}
-        self.open_successful()
+        Manager.reset()
+        self.open_successful(None)
 
     def saveas(self):
         file = ask_filename(True)

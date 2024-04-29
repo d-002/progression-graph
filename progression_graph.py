@@ -1,7 +1,7 @@
 import os
 import pygame
 from math import sqrt
-from os.path import *
+from os.path import exists, splitext, basename
 from pygame.locals import *
 
 def syntax_error(y, expression):
@@ -82,9 +82,11 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
         enter = False # for when to try to get out of the loop
         for event in pygame.event.get():
             if event.type == QUIT:
-                return # returning None should trigger a quit externally
+                pygame.event.post(pygame.event.Event(QUIT))
+                return
             elif event.type == KEYDOWN:
                 if event.key == K_BACKSPACE: string = string[:-1]
+                elif event.key == K_ESCAPE: return
                 elif event.key == K_RETURN or event.key == K_KP_ENTER:
                     enter = True
                 else:
@@ -391,6 +393,12 @@ class Point(GraphObject):
         s = self._size/2
         return x-s < pos[0] < x+s and y-s < pos[1] < y+s
 
+    def visible(self):
+        """Returns True if visible, taking scroll and zoom into account, otherwise returns False"""
+        x, y = graph.get_pos(self.x, self.y)
+        s = self._size/2
+        return -s <= x < Graph.W+s and -s <= y < Graph.H+s
+
     def update(self, events):
         """Called by grah update() each frame"""
         x, y = graph.get_pos(self.x, self.y)
@@ -688,11 +696,6 @@ class Graph:
         z = self.zoom * self.unit_size
         return (x - self.W/2) / z + self.scroll_x, (y - self.H/2) / z + self.scroll_y
 
-    def visible(self, x, y):
-        """Returns true if the point is visible (taking scroll and zoom into account), else false"""
-        x, y = self.get_pos(x, y)
-        return 0 <= x < self.W and 0 <= y < self.H
-
     def select(self, obj):
         """Sets self.selection to obj and updates self.ui"""
         self.selection = obj
@@ -707,7 +710,7 @@ class Graph:
         # get visible graph objects now, useful for collision checks
         visible_p = [] # points objects that are visible
         for point in Manager.points.values():
-            if self.visible(point.x, point.y):
+            if point.visible():
                 visible_p.append(point)
         visible_l = [] # same for links
         for link in Manager.links.values():
@@ -741,14 +744,14 @@ class Graph:
                 # finish adding a link
                 if type(self.selection) == Point and self.link is not None and self.link.p1 != self.selection:
                     # check if no link exists between these two points
-                    exists = False
+                    ok = True
                     for link in Manager.links.values():
                         if (link.p1 == self.link.p1 and link.p2 == self.selection) or \
                             (link.p2 == self.link.p1 and link.p1 == self.selection):
-                            exists = True
+                            ok = False
                             break
 
-                    if not exists:
+                    if ok:
                         self.link.p2 = self.selection
                         self.link.refresh()
                         self.link = None
@@ -839,13 +842,14 @@ class Graph:
                 self.scroll_x = x + dx
                 self.scroll_y = y + dy
 
-        # update and render menu and UI
         screen.fill(Palette.background)
-        self.ui.update()
 
         # update and render graph objects
         for link in visible_l: link.update(events)
         for point in visible_p: point.update(events)
+
+        # update and render menu and UI
+        self.ui.update()
 
         # display debug screen if needed
         if self._debug_surf is not None:

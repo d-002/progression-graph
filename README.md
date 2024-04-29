@@ -34,10 +34,6 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 - `# comment`: comment
 
 ## TODO
-- Escape to exit popups
-- Trigger quit next frame if quit in input
-- Only save used images
-- Handle no duplicate links
 - Be more generous for displaying visible objects
 - Scroll position and zoom in save file
 - File selector for images

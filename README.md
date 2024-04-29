@@ -37,5 +37,5 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 
 ## TODO
 - Zip file faster load/save: use diff
-- Upload to png, transparent background option. Image with margin around elements, zoom 1
 - Change images and sizes on zoom
+- Unselect when exporting

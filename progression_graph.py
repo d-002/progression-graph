@@ -5,7 +5,6 @@ from math import sqrt
 from os.path import exists, splitext, basename
 from pygame.locals import *
 
-from tkinter import Tk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 
 def get_popup_bg(message):
@@ -123,6 +122,9 @@ def ask_button(message, buttons):
                 run = False
                 res = None
                 pygame.event.post(pygame.event.Event(QUIT))
+            elif event.type == KEYDOWN and event.key == K_ESCAPE:
+                run = False
+                res = None
 
         screen.blit(background, (0, 0))
 
@@ -138,11 +140,7 @@ def ask_button(message, buttons):
     return res
 
 def import_image():
-    # create an invisible window to prevent seeing one on popup opening
-    tk = Tk()
-    tk.wm_attributes('-alpha', 0)
     files = askopenfilename(title='Import image(s)', filetypes=(('Image files', ('png', 'jpg', 'bmp', 'gif')),), multiple=True)
-    tk.destroy()
 
     if type(files) == tuple and len(files): # double protection in case API changes
         for file in files:
@@ -567,18 +565,18 @@ class Point(GraphObject):
         s = self._size/2
         return -s <= x < Graph.W+s and -s <= y < Graph.H+s
 
-    def update(self, events):
-        """Called by grah update() each frame"""
-        x, y = graph.get_pos(self.x, self.y)
+    def update(self, events, surf, project):
+        """Called by grah update() each frame. Blits a surface onto surf at the position given by the projector."""
+        x, y = project(self.x, self.y)
 
         # use a different texture when hovered
         i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
-        screen.blit(self._surfs[i], (x - self._size/2, y - self._size/2))
+        surf.blit(self._surfs[i], (x - self._size/2, y - self._size/2))
 
         # draw text
         if self._text_surfs is not None:
             t = self._text_surfs[bool(i)]
-            screen.blit(t, (x - t.get_width()/2, y + self._size/2 + 5))
+            surf.blit(t, (x - t.get_width()/2, y + self._size/2 + 5))
 
 class Link(GraphObject):
     """Link between two points in the graph"""
@@ -651,20 +649,20 @@ class Link(GraphObject):
         dx, dy = xm-xm2, ym-ym2
         return dx*dx + dy*dy <= s2
 
-    def update(self, events):
-        """Called by grah update() each frame"""
+    def update(self, events, surf, project):
+        """Called by grah update() each frame. Draws a line onto surf at the position given by the projector."""
 
         # get end points screen coordinates
-        pos1 = graph.get_pos(self.p1.x, self.p1.y)
+        pos1 = project(self.p1.x, self.p1.y)
         if self.p2 is None:
             # the link is currently being drawn
             pos2 = pygame.mouse.get_pos()
-        else: pos2 = graph.get_pos(self.p2.x, self.p2.y)
+        else: pos2 = project(self.p2.x, self.p2.y)
 
         # get color depending on if the link is hovered/selected
         i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
         col = Palette.link[self._state][i]
-        pygame.draw.line(screen, col, pos1, pos2, self._size)
+        pygame.draw.line(surf, col, pos1, pos2, self._size)
 
 class Image:
     """Pygame surface loaded from image file.
@@ -695,7 +693,8 @@ class UI:
 
     def __init__(self):
         self.surf = None # blitted, cached surface
-        texts = [('Left click: select elements, S: save file, W: save as file, N: new file, O: open file,', 'P: new point, I: import image, Z: reset zoom, Q: quit'),
+        texts = [('Click: select elements, drag with mouse: move/scroll, scroll: zoom, S: save file, W: save as file,',
+                  'N: new file, O: open file, P: new point, I: import image, Z: reset zoom, E: export graph to image,', 'F: export with background, Q: quit'),
                  'Del: delete link']
         # edit texts to discriminate between deleting a point, its image or its text
         text = 'L: start link, I: add image, T: add text, Del: delete %s, R: cycle rank, C: cycle state'
@@ -748,6 +747,7 @@ class Graph:
     W = 900
     H = 500
 
+    unit_size = 100 # graph unit to pixel ratio
     min_z = 0.01
 
     def __init__(self):
@@ -756,7 +756,6 @@ class Graph:
         self.scroll_x = 0
         self.scroll_y = 0
         self.zoom = 1
-        self.unit_size = 100 # graph unit to pixel ratio
 
         self.save_file = None
 
@@ -1012,14 +1011,72 @@ class Graph:
             self.save_file = file
             self.save()
 
+    def export(self, transparent):
+        """Exports the graph into a png image, either with Palette.background background or no background.
+        The render is done at zoom 1, and a margin of 20px is added around the graph.
+        There needs to be at least one element in the graph for it to be rendered.
+        Very large graphs might MemoryError, might have to export to another zoom. TODO?
+        For now, it just raises an error."""
+
+        if not len(Manager.points):
+            ask_button('Cannot render an empty graph.', [(0, 'OK')])
+            return
+
+        file = asksaveasfilename(title='Export to file', filetypes=(('PNG files', '.png'),))
+        if not file: return
+        if not file.endswith('.png'): file += '.png'
+
+        # display a loading screen
+        old_screen, background = get_popup_bg('Loading... Please wait.')
+        screen.blit(background, (0, 0))
+        pygame.display.flip()
+
+        # get the bounding boxes
+        x0 = y0 = None
+        x1 = y1 = None
+        for point in Manager.points.values():
+            # yeah I know it's _ but I can't be bothered
+            offset = point._size/Graph.unit_size
+            if x0 is None or point.x < x0: x0 = point.x-offset
+            if y0 is None or point.y < y0: y0 = point.y-offset
+            if x1 is None or point.x > x1: x1 = point.x+offset
+            if y1 is None or point.y > y1: y1 = point.y+offset
+        w, h = (x1-x0)*Graph.unit_size, (y1-y0)*Graph.unit_size
+
+        try:
+            surf = pygame.Surface((w+40, h+40), SRCALPHA)
+        except MemoryError:
+            ask_button('A MemoryError occured.\nMaybe try to lower the size of your graph.', [(0, 'OK')])
+            return
+
+        if not transparent:
+            surf.fill(Palette.background)
+
+        # add all objects: make a custom projector for this surface
+        project = lambda x, y: ((x-x0)*Graph.unit_size + 20, (y-y0)*Graph.unit_size + 20)
+
+        for link in Manager.links.values():
+            link.update([], surf, project)
+        for point in Manager.points.values():
+            point.update([], surf, project)
+
+        pygame.image.save(surf, file)
+
+        # reset the screen to as it was before for safety
+        screen.blit(old_screen, (0, 0))
+        pygame.display.flip()
+
+        # get pygame events, also for safety
+        pygame.event.get()
+
     def get_pos(self, x, y):
         """Returns the position, in screen coordinates, corresponding to a position in graph coordinates"""
-        z = self.zoom * self.unit_size
+        z = self.zoom * Graph.unit_size
         return (x - self.scroll_x) * z + self.W/2, (y - self.scroll_y) * z + self.H/2
 
     def from_pos(self, x, y):
         """Returns the position, in graph coordinates, corresponding to a position in screen coordinates"""
-        z = self.zoom * self.unit_size
+        z = self.zoom * Graph.unit_size
         return (x - self.W/2) / z + self.scroll_x, (y - self.H/2) / z + self.scroll_y
 
     def select(self, obj):
@@ -1137,6 +1194,10 @@ class Graph:
                             if path != '': self.open(path)
                     elif event.key == K_i:
                         import_image()
+                    elif event.key == K_e:
+                        self.export(True)
+                    elif event.key == K_f:
+                        self.export(False)
 
                 elif type(self.selection) == Point:
                     if event.key == K_l and self.link is None:
@@ -1203,8 +1264,8 @@ class Graph:
         screen.fill(Palette.background)
 
         # update and render graph objects
-        for link in visible_l: link.update(events)
-        for point in visible_p: point.update(events)
+        for link in visible_l: link.update(events, screen, self.get_pos)
+        for point in visible_p: point.update(events, screen, self.get_pos)
 
         # update and render menu and UI
         self.ui.update()

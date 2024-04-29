@@ -25,13 +25,17 @@ class Palette:
     def __init__():
         Palette.init = True
         col = (0, 255, 0)
-        Palette.link = [col, Palette.mult(col, 1, 63), Palette.mult(col, 1, 127)]
+        Palette.link = [col, Palette.mult(col, 0.6, 127), Palette.mult(col, 0.3, 192)]
 
     @staticmethod
     def mult(col, x, add=0):
-        """Changes the exposition of a color: x=1 does nothing, x=0 is black, and colors are clamped"""
-        if x == 1: return col
-        
+        """Changes the exposition of a color: x=1 does nothing, x=0 is black, and colors are clamped.
+        You can also specify add, an offset applied to all the color's components.
+
+        Warning: only supports RGB colors"""
+
+        if x == 1 and not add: return col
+
         r, g, b = col[0]*x + add, col[1]*x + add, col[2]*x + add
         return (255 if r > 255 else r, 255 if g > 255 else g, 255 if b > 255 else b)
 Palette.__init__()
@@ -429,7 +433,7 @@ class Link(GraphObject):
         # calculate t
         dx, dy = xm-x1, ym-y1
         p1_m = dx*dx + dy*dy
-        dx, dy = x2-x2, y2-y1
+        dx, dy = x2-x1, y2-y1
         p1_p2 = dx*dx + dy*dy
         t = sqrt(p1_m/p1_p2)
         if t < 0 or t > 1: return False
@@ -451,10 +455,9 @@ class Link(GraphObject):
         else: pos2 = graph.get_pos(self.p2.x, self.p2.y)
 
         # get color depending on if the link is hovered/selected
-        col = Palette.link[2 if self == graph.selection else 1 if self == graph.hovered else 0]
+        i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
+        col = Palette.link[i]
         pygame.draw.line(screen, col, pos1, pos2, self._size)
-
-        #graph.debug(
 
 class Image:
     """Pygame surface loaded from image file"""
@@ -538,13 +541,13 @@ class Graph:
         else:
             # append text in a new line
             w, h = self._debug_surf.get_size()
-            width = max(width, w)
+            width = w if w > width else width
             surf = pygame.Surface((width, h+16))
             surf.blit(self._debug_surf, (0, 0))
             self._debug_surf = surf
             y = h
 
-        self._debug_surf.blit(font.render(text, (0, y)))
+        self._debug_surf.blit(font.render(text, True, Palette.text), (0, y))
 
     def open(self, save_file):
         """Sets self.save_file and loads save file"""
@@ -691,9 +694,10 @@ class Graph:
 
                 if self.selection is None:
                     self.drag_start = (self.scroll_x, self.scroll_y)
-                else:
+                elif type(self.selection) == Point:
                     self.drag_start = (self.selection.x, self.selection.y)
-                self.drag_mouse_start = event.pos
+                if type(self.selection) != Link:
+                    self.drag_mouse_start = event.pos
 
                 # finish adding a link
                 if type(self.selection) == Point and self.link is not None and self.link.p1 != self.selection:

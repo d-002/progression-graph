@@ -18,7 +18,7 @@ def get_popup_bg(message):
     background.blit(dark, (0, 0))
 
     # make a box for the UI
-    pygame.draw.rect(background, Palette.background, Rect((Graph.W*0.2, Graph.H*0.2, Graph.W*0.6, Graph.H*0.6)))
+    pygame.draw.rect(background, Palette.background, Rect((Graph.W*0.15, Graph.H*0.15, Graph.W*0.7, Graph.H*0.7)))
 
     # draw the text, can have multiple lines
     y = Graph.H*0.3
@@ -27,7 +27,9 @@ def get_popup_bg(message):
         background.blit(text, (Graph.W/2 - text.get_width()/2, y))
         y += 16
 
-    return background
+    old = pygame.Surface((Graph.W, Graph.H))
+    old.blit(screen, (0, 0))
+    return background, background
 
 def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     """Input box, freezes other actions to ask for user value.
@@ -36,7 +38,7 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     Param check: lambda used to check if the entry value is valid"""
 
     # get base popup
-    background = get_popup_bg(message)
+    old_screen, background = get_popup_bg(message)
 
     # init error text
     error_text = [font.render("Error: can't decode value", True, Palette.red),
@@ -91,6 +93,9 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
         pygame.display.flip()
         clock.tick(FPS)
 
+    # restore old screen state in case there are multiple popups back-to-back, darkening the screen
+    screen.blit(old_screen, (0, 0))
+
     return cast(string)
 
 def ask_button(message, buttons):
@@ -99,7 +104,7 @@ def ask_button(message, buttons):
     Param message: message to be displayed, can use newlines, but not too many as it would fill the screen
     Param buttons: list (can be empty) of pairs (returned value, 'button text')"""
 
-    background = get_popup_bg(message)
+    old_screen, background = get_popup_bg(message)
 
     # set up buttons objects, next to one another
     offset = Graph.W/2 - 60*(len(buttons)-1)
@@ -128,6 +133,7 @@ def ask_button(message, buttons):
         pygame.display.flip()
         clock.tick(FPS)
 
+    screen.blit(old_screen, (0, 0))
     return res
 
 def import_image():
@@ -710,6 +716,8 @@ class Graph:
         # debug information
         self._debug_surf = None
 
+        self.changes = False # set to True when changed something (will trigger a popup on close)
+
     def debug(self, *args):
         """Adds debug information to be displayed in self.update, deprecated unless in development.
         *args: many arguments that will be added to the debug string with space separators.
@@ -811,6 +819,8 @@ class Graph:
         self.hovered = None
         self.hovered_l = None
         self.link = None
+        self.changes = False
+        set_title(save_file, False)
         self.ui.update_surf()
 
     def save(self):
@@ -857,6 +867,9 @@ class Graph:
         # save into file
         with open(self.save_file, 'w') as f: f.write('\n'.join(content)+'\n')
 
+        self.changes = False
+        set_title(self.save_file)
+
     def get_pos(self, x, y):
         """Returns the position, in screen coordinates, corresponding to a position in graph coordinates"""
         z = self.zoom * self.unit_size
@@ -899,6 +912,8 @@ class Graph:
             if self.hovered is not None or self.link is not None: break
             if link.collide(mpos): self.hovered = link
 
+        change = False # did the user do a change this frame?
+
         # events check
         for event in events:
             # start dragging
@@ -928,6 +943,7 @@ class Graph:
                         self.link = None
                         self.select(None)
                         self.drag_start = None # prevent unwanted drag
+                        change = True
 
             # stop dragging
             elif event.type == MOUSEBUTTONUP and event.button == 1:
@@ -939,6 +955,7 @@ class Graph:
                 if event.y > 0: self.zoom *= 1.2 # zoom in
                 elif self.zoom > 0.01: self.zoom /= 1.2 # zoom out
                 else: self.zoom = 0.01 # min zoom
+                change = True
 
             # keys
             elif event.type == KEYDOWN:
@@ -962,6 +979,7 @@ class Graph:
                 elif self.selection is None:
                     if event.key == K_p:
                         Manager.new_point(*self.from_pos(*mpos), 0, 0)
+                        change = True
                     elif event.key == K_s:
                         self.save()
                     elif event.key == K_o:
@@ -975,16 +993,21 @@ class Graph:
                         self.link = Manager.new_link(self.selection.id, None)
                     elif event.key == K_i:
                         image = image_selector()
-                        if image is not None: self.selection.set_image(image)
+                        if image is not None:
+                            self.selection.set_image(image)
+                            change = True
                     elif event.key == K_t:
                         check = lambda s: len(s) and '\n' not in s and '\r' not in s and '\t' not in s
                         text = ask_input_box('Enter point text:', str, check, self.W-20)
                         if text is not None:
                             self.selection.set_text(text)
+                            change = True
                     elif event.key == K_r:
                         self.selection.cycle_rank()
+                        change = True
                     elif event.key == K_c:
                         self.selection.cycle_state()
+                        change = True
                     elif event.key == K_DELETE:
                         if self.selection.image is not None:
                             self.selection.set_image(None)
@@ -1000,11 +1023,13 @@ class Graph:
                                 del Manager.links[link]
                             self.selection = None
                         self.select(self.selection) # update self.ui
+                        change = True
 
                 elif type(self.selection) == Link:
                     if event.key == K_DELETE:
                         del Manager.links[self.selection.id]
                         self.select(None)
+                        change = True
 
         if self.drag_start is not None:
             x, y = self.drag_start
@@ -1019,6 +1044,11 @@ class Graph:
             else:
                 self.scroll_x = x + dx
                 self.scroll_y = y + dy
+            change = bool(dx or dy)
+
+        if change:
+            self.changes = True
+            set_title(self.save_file, True)
 
         screen.fill(Palette.background)
 
@@ -1034,11 +1064,28 @@ class Graph:
             screen.blit(self._debug_surf, (0, 0))
             self._debug_surf = None
 
+def set_title(name, unsaved=False):
+    """Sets the title of the pygame application"""
+
+    if unsaved: name = '*%s*' %name
+    pygame.display.set_caption('Progression Graph - '+name)
+
+def want_to_save():
+    """Triggers a "save before doing some action?" popup.
+    Returns: 0: save, 1: don't save, None: cancel
+    Put into a function because used multiple times in the code."""
+
+    return ask_button('You have unsaved changes. Do you want to save?', [(0, 'Yes'), (1, 'No'), (None, 'Cancel')])
+
 def quit_app():
     """Displays a save and quit? popup if made changes [TODO].
     Returns True if the window should be closed, otherwise False."""
-
     global run
+
+    res = 1 if not graph.changes else want_to_save()
+
+    if res is None: return
+    if res == 0: graph.save()
     run = False
     return True
 
@@ -1046,7 +1093,7 @@ FPS = 60
 pygame.init()
 
 screen = pygame.display.set_mode((Graph.W, Graph.H))
-pygame.display.set_caption('Progression graph')
+set_title('')
 font = pygame.font.SysFont('consolas', 16)
 font2 = pygame.font.SysFont('consolas', 12)
 clock = pygame.time.Clock()

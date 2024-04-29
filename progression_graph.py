@@ -29,7 +29,7 @@ def get_popup_bg(message):
 
     old = pygame.Surface((Graph.W, Graph.H))
     old.blit(screen, (0, 0))
-    return background, background
+    return old, background
 
 def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     """Input box, freezes other actions to ask for user value.
@@ -655,17 +655,31 @@ class Image:
 class UI:
     """UI elements on top of the screen: help, info about selection"""
     def __init__(self):
-        self.surf = pygame.Surface((Graph.W, 40), SRCALPHA) # blitted, cached surface
-        self.text = ['P: new point, S: save file, O: open save file, I: import image, Z: reset zoom, Q: quit',
-                     'Del: delete link']
+        self.surf = None # blitted, cached surface
+        texts = [('Left click: select elements, S: save file, W: save as file, N: new file, O: open file,', 'P: new point, I: import image, Z: reset zoom, Q: quit'),
+                 'Del: delete link']
         # edit texts to discriminate between deleting a point, its image or its text
         text = 'L: start link, I: add image, T: add text, Del: delete %s, R: cycle rank, C: cycle state'
-        self.text.append(text %'point')
-        self.text.append(text %"text")
-        self.text.append(text %"image")
+        texts.append(text %'point')
+        texts.append(text %"text")
+        texts.append(text %"image")
 
         # transform the texts into text surfaces
-        self.text = [font.render(text, True, Palette.text) for text in self.text]
+        self.text = [None]*len(texts)
+        for i, text in enumerate(texts):
+            # text can have multiple lines, treat all texts the same way
+            if type(text) == str:
+                text = (text,)
+
+            # add all lines of a text into one surface
+            h = len(text)*16
+            y = 0
+            surf = pygame.Surface((Graph.W, h), SRCALPHA)
+
+            for line in text:
+                surf.blit(font.render(line, True, Palette.text), (0, y))
+                y += 16
+            self.text[i] = surf
 
         self.update_surf(True)
 
@@ -673,15 +687,18 @@ class UI:
         """Updates cached Surface: redraws background, adds elements depending on selection.
         If init is True (should be set to True only on init), graph is assumed to not exist."""
 
-        pygame.draw.rect(self.surf, Palette.neutral, Rect((0, 0), (Graph.W, 40)))
-
         if init or graph.selection is None:
-            self.surf.blit(self.text[0], (12, 12))
+            text = self.text[0]
         elif type(graph.selection) == Link:
-            self.surf.blit(self.text[1], (12, 12))
+            text = self.text[1]
         elif type(graph.selection) == Point:
-            i = 4 if graph.selection.image is not None else 3 if graph.selection.text is not None else 2
-            self.surf.blit(self.text[i], (12, 12))
+            text = self.text[4 if graph.selection.image is not None else 3 if graph.selection.text is not None else 2]
+
+        h = 24 + text.get_height()
+        self.surf = pygame.Surface((Graph.W, h), SRCALPHA)
+
+        pygame.draw.rect(self.surf, Palette.neutral, Rect((0, 0), (Graph.W, h)))
+        self.surf.blit(text, (12, 12))
 
     def update(self):
         self.surf.set_alpha(100 if pygame.mouse.get_pos()[1] < 40 else 255)

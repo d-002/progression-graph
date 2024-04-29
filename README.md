@@ -2,28 +2,37 @@
 Progression graph tool for games
 
 ## Screenshots
-*[upcoming]*
+![](https://github.com/d-002/progression-graph/assets/69427207/ba704b64-ad56-4a3e-90d5-f2dc26d2c171)
+![](https://github.com/d-002/progression-graph/assets/69427207/2c4a48c5-ea13-4f6f-9a83-974eb9726fbf)
+![](https://github.com/d-002/progression-graph/assets/69427207/19dc0699-c994-44f0-90d1-7bf9309813e6)
 
 ## Requirements
 - python>=3.10
 - pygame>=2.3.0
 
 ## Features
-- Create points, add text and images to them, drag them around. The text is displayed on hover for lower ranked (sized) points, and always for higher ranks.
-- Link these points, links have different sizes depending on the max rank of the connected points
-- Points can have different ranks, determining their size
-- Save and open intuitively formatted files
+- Create nodes, add text and images to them, drag them around. The text is displayed on hover for lower ranked (sized) nodes, and always for higher ranks.
+- Link these nodes, links have different sizes depending on the max rank of the connected nodes
+- Nodes can have different ranks, determining their size
+- Save and open intuitively formatted files (zip-like format)
 - Visualize the tree, export into png file
-- Points have a state: to do, doing, completed, with different colors. You can cycle them with c while selected, and their state updates the connected links. This allows to keep track of the project's state easily.
+- Nodes have a state: to do, doing, completed, with different colors. You can cycle them while selected, and their state updates the connected links.
 
 ## Controls
-Click on an object to select it, hit Enter or Escape to unselect it. Escape can also be used to cancel creating a link.
+Click on an object to select it, hit Escape to unselect it. Escape can also be used to cancel creating a link.
+
+Create a link with L when a node is selected, click another node to connect the two nodes.
 
 Options will appear on top of the screen dependoing on the selection. Hit the corresponding keys to execute the different actions.
 
-Zoom in and out with mouse scrolling, reset zoom with z.
+When no object is selected, you can zoom in and out with the mouse wheel, and reset the zoom with z.
 
-Pressing Delete will detach the image from a point, or remove its text, or delete the point
+Pressing Delete will detach the image from a point, or remove its text, or delete the point if there is nothing in it.  
+You can also remove the text or the image from a point by adding an empty text or hitting Cancel in the input popup.
+
+S saves the current file, W saves to a new file, N opens a new file, O opens a file.
+
+You can export the graphs you created with E (export without background) and F (filled background), and quit with Q or the regular window means.
 
 ## Save files format
 - `P x y r s id`: creates a new point at coordinates (x, y), of rank r, states and with ID *id*

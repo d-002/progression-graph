@@ -16,16 +16,22 @@ def get_popup_bg(message):
     background = pygame.Surface((Graph.W, Graph.H))
     background.blit(screen, (0, 0))
     background.blit(dark, (0, 0))
-    
-    # make box for the UI
+
+    # make a box for the UI
     pygame.draw.rect(background, Palette.background, Rect((Graph.W*0.2, Graph.H*0.2, Graph.W*0.6, Graph.H*0.6)))
-    text = font.render(message, True, Palette.text)
-    background.blit(text, (Graph.W/2 - text.get_width()/2, Graph.H*0.3))
+
+    # draw the text, can have multiple lines
+    y = Graph.H*0.3
+    for line in message.split('\n'):
+        text = font.render(line, True, Palette.text)
+        background.blit(text, (Graph.W/2 - text.get_width()/2, y))
+        y += 16
 
     return background
 
 def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     """Input box, freezes other actions to ask for user value.
+    Param message: message to display. Can contain newlines, but may overflow onto the input
     Param cast: function used to check for input format
     Param check: lambda used to check if the entry value is valid"""
 
@@ -87,6 +93,43 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
 
     return cast(string)
 
+def ask_button(message, buttons):
+    """Input with message. The returned value is either None if quitted the window or pressed Escape,
+    or the value associated with each of the buttons.
+    Param message: message to be displayed, can use newlines, but not too many as it would fill the screen
+    Param buttons: list (can be empty) of pairs (returned value, 'button text')"""
+
+    background = get_popup_bg(message)
+
+    # set up buttons objects, next to one another
+    offset = Graph.W/2 - 60*(len(buttons)-1)
+    i = 0
+    for res, text in buttons:
+        buttons[i] = (res, Button(text, offset + 120*i, Graph.H/2, 100))
+        i += 1
+
+    run = True
+    res = None # returned result
+    while run:
+        events = pygame.event.get()
+        for event in events:
+            if event.type == QUIT:
+                run = False
+                res = None
+                pygame.event.post(pygame.event.Event(QUIT))
+
+        screen.blit(background, (0, 0))
+
+        for value, button in buttons:
+            if button.update(events):
+                run = False
+                res = value
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
+    return res
+
 def import_image():
     # create an invisible window to prevent seeing one on popup opening
     tk = Tk()
@@ -105,8 +148,8 @@ def image_selector():
     """Graphical image selector, displays all loaded images into a grid for the user to select"""
 
     # get and resize all loaded images
-    images = list(Manager.images.values())
-    ids = list(Manager.images.keys())
+    images = list(Manager.images.values())*100
+    ids = list(Manager.images.keys())*100
     for i, image in enumerate(images):
         surf = image.surf
         w, h = surf.get_size()
@@ -115,19 +158,25 @@ def image_selector():
         images[i] = pygame.transform.scale(surf, (w, h))
 
     w = (Graph.W-50) // 90 # images in one row
-    height = len(images)//w*90 + 50
+    iheight = len(images)//w*90 + 50 # total images table height
+    vheight = Graph.H-46 # visible height
     scroll = 0
-    do_scroll = height > Graph.H
+    do_scroll = iheight > vheight
+
+    cancel = Button('Cancel', Graph.W/2, Graph.H-36)
+    border_col = Palette.mult(Palette.background, 1.2)
 
     run = True
     selection = None
     while run:
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == QUIT:
                 run = False
                 selection = None
+                pygame.event.post(pygame.event.Event(QUIT))
             elif event.type == MOUSEWHEEL and do_scroll:
-                scroll = min(max(scroll - 20*event.y, 0), height-Graph.H)
+                scroll = min(max(scroll - 20*event.y, 0), iheight-vheight)
             elif event.type == MOUSEBUTTONDOWN and selection is not None:
                 run = False # clicked on an image
 
@@ -135,8 +184,8 @@ def image_selector():
 
         # draw scrollbar if needed
         if do_scroll:
-            y = scroll * Graph.H / (height-20)
-            h = Graph.H*Graph.H/height - 20
+            y = scroll * vheight / (iheight-20)
+            h = vheight*vheight/iheight - 20
             pygame.draw.rect(screen, Palette.text, Rect(Graph.W-15, 10+y, 5, h))
 
         # get mouse data and display images
@@ -145,7 +194,7 @@ def image_selector():
         selection = None
         for i, image in enumerate(images):
             x, y = 50 + 90*(i%w), 50 + 90*(i//w) - scroll
-            if -50 < y < Graph.H:
+            if -50 < y < vheight:
                 if x-10 <= mx < x+60 and y-10 <= my < y+60:
                     # image hovered
                     pygame.draw.rect(screen, Palette.neutral, Rect(x-10, y-10, 70, 70))
@@ -154,11 +203,66 @@ def image_selector():
                         run = False
                 screen.blit(image, (x, y))
 
+        # display bottom border and Cancel button
+        pygame.draw.rect(screen, border_col, Rect(0, vheight, Graph.W, 46))
+        if cancel.update(events):
+            run = False
+            selection = None
+
         pygame.display.flip()
         clock.tick(FPS)
 
     if selection is None: return
     return Manager.images[ids[selection]]
+
+class Button:
+    """Simple button widget to use in popups"""
+
+    def __init__(self, text, x, y, min_w=200):
+        """Creates a button at pos (x, y) on the screen (top center),
+        with width of at least min_w pixels"""
+
+        self._x = x
+        self._y = y
+
+        # create the base text surface and pad it,
+        # also add space on the sides if needed to get to min_w width
+        text = font.render(text, True, Palette.text)
+        wt, ht = text.get_size()
+        w = min_w if wt < min_w else wt
+        self._w, self._h = w+10, ht+10
+
+        tsurf = pygame.Surface((self._w, self._h), SRCALPHA)
+        tsurf.blit(text, (self._w/2 - wt/2 + 5, 5))
+
+        # make textures depending on the button state: normal, hovered, selected
+        self._surfs = [None]*3
+        for i, mult in enumerate((1, 1.2, 1.5)):
+            surf = pygame.Surface((self._w, self._h), SRCALPHA)
+            surf.fill(Palette.mult(Palette.neutral, mult))
+            surf.blit(tsurf, (0, 0))
+            self._surfs[i] = surf
+
+    def update(self, events):
+        """Returns True if the button is clicked, False otherwise.
+        The button is also updated and drawn on the screen"""
+
+        mx, my = pygame.mouse.get_pos()
+        click = pygame.mouse.get_pressed()[0]
+        hovered = self._x - self._w/2 <= mx <= self._x + self._w/2 and \
+                  self._y <= my <= self._y + self._h
+
+        res = False
+        for event in events:
+            if event.type == MOUSEBUTTONUP:
+                if hovered:
+                    res = True
+                    break
+
+        # display the button
+        screen.blit(self._surfs[(click+1) * hovered], (self._x - self._w/2, self._y))
+
+        return res
 
 class Error:
     """Static class, used to make handling exceptions easier
@@ -167,13 +271,12 @@ class Error:
     @staticmethod
     def syntax(y, expression):
         """Used to help handling file parsing errors"""
-        raise SyntaxError('Could not parse save file at line %d: "%s"\nAborting file loading' %(y+1, expression))
+        ask_button('Could not parse save file at line %d:\n"%s"\nAborting file loading' %(y+1, expression), [(0, 'OK')])
 
     @staticmethod
     def corrupted_file(comment):
         """Used when a non-critical file parsing error has been found. This doesn't interrupt file loading."""
-        print('Corrupted file: %s\nThe will will still be loaded, but check error-related changes before saving.' %comment)
-        #raise SyntaxError('Corrupted file: %s\nThe will will still be loaded, but check error-related changes before saving.' %comment)
+        ask_button('Detected save file corruption:\n"%s"\nThe will will still be loaded, check for side-effects.' %comment, [(0, 'OK')])
 
 class Palette:
     """Static class, used to store colors data"""
@@ -858,12 +961,12 @@ class Graph:
 
                 elif self.selection is None:
                     if event.key == K_p:
-                        Manager.new_point(*self.from_pos(*mpos), 0)
+                        Manager.new_point(*self.from_pos(*mpos), 0, 0)
                     elif event.key == K_s:
                         self.save()
                     elif event.key == K_o:
-                        path = ask_input_box('Enter save file', str, lambda s: exists(s))
-                        if path is not None: self.open(path)
+                        path = askopenfilename(title='Open save file', filetypes=(('Progression Graph File', '.txt'),))
+                        if path != '': self.open(path)
                     elif event.key == K_i:
                         import_image()
 

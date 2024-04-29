@@ -50,9 +50,6 @@ Param cast: function used to check for input format
                   font.render('  Error: invalid value', True, Palette.red)]
     error_pos = (Graph.W/2 - error_text[0].get_width()/2, Graph.H*0.3 + 20)
 
-    # get the "_" character width, useful later on
-    blink_w = font.render('_', True, Palette.text).get_width()
-
     # loop until the user presses Enter
     string = ''
     run = True
@@ -89,7 +86,7 @@ Param cast: function used to check for input format
         if error: screen.blit(error_text[error-1], error_pos)
 
         # draw actual textbox
-        w = max(text.get_width() + (0 if blink else blink_w), 200) # minimum input size
+        w = max(text.get_width() + (0 if blink else char_w), 200) # minimum input size
         x = Graph.W/2 - w/2
         y = Graph.H/2 - 8
         pygame.draw.rect(screen, Palette.neutral, Rect((x-4, y-4), (w+8, 24)))
@@ -239,7 +236,9 @@ class Point(GraphObject):
         self.image = None # image, None for no image
 
         self._surf = None # should always contain the surface with the right size
-        self._text_surf = None # rendered pygame font, None for no text
+        self._text_surfs = None
+        # rendered pygame fonts, None for no text
+        # if text, will contain [shortened text, full text (on hover/selection)]
         self._size = None # should contain the size according to self.rank
 
         self.set_rank(rank) # init self.rank, self.size and self.surfs
@@ -259,10 +258,66 @@ class Point(GraphObject):
         for link in Manager.links.values():
             link.update_rank()
 
+    @staticmethod
+    def black_back(surf):
+        """Adds a semi-transparent Palette.background background to a surface"""
+        new = pygame.Surface(surf.get_size(), SRCALPHA)
+
+        black = pygame.Surface(surf.get_size(), SRCALPHA)
+        black.fill(Palette.background)
+        black.set_alpha(127)
+        new.blit(black, (0, 0))
+        new.blit(surf, (0, 0))
+
+        return new
+
     def set_text(self, text):
         """Sets the point's text and updates its text Surface"""
         self.text = text
-        self._text_surf = None if text is None else font.render(text, True, Palette.text)
+        if text is None:
+            self._text_surfs = None
+        else:
+            max_width = 100
+            if len(text)*char_w2 > max_width:
+                # make unselected surface: cut text
+                surf = font2.render(text[:int(max_width/char_w2)-3]+'...', True, Palette.text)
+                self._text_surfs = [Point.black_back(surf), None]
+
+                # make selected surface: word wrap if necessary
+                # get words and split them if bigger than max_width
+                words = []
+                for word in text.split(' '):
+                    while len(word)*char_w2 > max_width:
+                        i = int(max_width/char_w2)-1
+                        add, word = word[:i]+'-', word[i:]
+                        words.append(add)
+                    words.append(word)
+
+                lines = ['']
+                i = 0
+                for word in words:
+                    space = ' ' if lines[i] else ''
+                    if len(lines[i]+space+word) * char_w2 > max_width:
+                        if lines[i] == '':
+                            lines[i] += word
+                            lines.append('')
+                        else: lines.append(word)
+                        i += 1
+                    else:
+                        lines[i] += space+word
+
+                # assemble lines into one surface
+                width = len(max(lines, key=lambda l: len(l)))*char_w2
+                surf = pygame.Surface((width, 12*len(lines)), SRCALPHA)
+                for y, line in enumerate(lines):
+                    line = font2.render(line, True, Palette.text)
+                    surf.blit(line, (width/2 - line.get_width()/2, y*12))
+
+                self._text_surfs[1] = Point.black_back(surf)
+            else:
+                # same text for both unselected and selected
+                surf = Point.black_back(font2.render(text, True, Palette.text))
+                self._text_surfs = [surf, surf]
 
     def set_image(self, image):
         """Sets and resizes self.surfs depending on self.size"""
@@ -303,6 +358,11 @@ class Point(GraphObject):
         i = self.collide(pygame.mouse.get_pos()) or self == graph.selection
         screen.blit(self._surfs[i], (x - self._size/2, y - self._size/2))
 
+        # draw text
+        if self._text_surfs is not None:
+            t = self._text_surfs[i]
+            screen.blit(t, (x - t.get_width()/2, y + self._size/2 + 5))
+
 class Link(GraphObject):
     """Link between two points in the graph"""
 
@@ -325,6 +385,8 @@ class Link(GraphObject):
         return Link.rank_sizes[rank]
 
     def update_rank(self):
+
+    # get the "_" character width, useful later on
         """Triggered for all links when a point changes rank, to update their rank"""
         if self.p2 is None: self.rank = self.p1.rank
         else: self.rank = max(self.p1.rank, self.p2.rank)
@@ -596,7 +658,9 @@ class Graph:
                         image = image_selector()
                         if image is not None: self.selection.set_image(image)
                     elif event.key == K_t:
-                        pass
+                        text = ask_input_box('Enter point text:', str, lambda s: len(s), self.W-20)
+                        if text is not None:
+                            self.selection.set_text(text)
                     elif event.key == K_r:
                         self.selection.set_rank((self.selection.rank+1)%Point.N_RANKS)
                     elif event.key == K_DELETE:
@@ -643,8 +707,13 @@ pygame.init()
 screen = pygame.display.set_mode((Graph.W, Graph.H))
 pygame.display.set_caption('Progression graph')
 font = pygame.font.SysFont('consolas', 16)
+font2 = pygame.font.SysFont('consolas', 12)
 clock = pygame.time.Clock()
 ticks = pygame.time.get_ticks
+
+# get the characters length (fonts should be monospace)
+char_w = font.render('_', True, Palette.text).get_width()
+char_w2 = font2.render('_', True, Palette.text).get_width()
 
 graph = Graph()
 graph.open('test_save.txt')

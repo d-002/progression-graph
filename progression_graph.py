@@ -1,5 +1,6 @@
 import os
 import pygame
+from math import sqrt
 from os.path import *
 from pygame.locals import *
 
@@ -13,23 +14,31 @@ class Palette:
     background = (40, 40, 43)
     neutral = (80, 80, 85)
     red = (255, 0, 0)
-    link = (0, 255, 0)
 
     box_outer = (90, 90, 90)
     box_sep = (50, 50, 50)
     box_inner = (130, 130, 130)
 
+    init = False # to make sure Palette is init
+
     @staticmethod
-    def mult(col, x):
+    def __init__():
+        Palette.init = True
+        col = (0, 255, 0)
+        Palette.link = [col, Palette.mult(col, 1, 63), Palette.mult(col, 1, 127)]
+
+    @staticmethod
+    def mult(col, x, add=0):
         """Changes the exposition of a color: x=1 does nothing, x=0 is black, and colors are clamped"""
         if x == 1: return col
         
-        r, g, b = col[0]*x, col[1]*x, col[2]*x
+        r, g, b = col[0]*x + add, col[1]*x + add, col[2]*x + add
         return (255 if r > 255 else r, 255 if g > 255 else g, 255 if b > 255 else b)
+Palette.__init__()
 
 def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     """Input box, freezes other actions to ask for user value.
-Param cast: function used to check for input format
+    Param cast: function used to check for input format
     Param check: lambda used to check if the entry value is valid"""
 
     # make a darkened background from the current screen state
@@ -236,9 +245,9 @@ class Point(GraphObject):
         self.image = None # image, None for no image
 
         self._surf = None # should always contain the surface with the right size
-        self._text_surfs = None
         # rendered pygame fonts, None for no text
         # if text, will contain [shortened text, full text (on hover/selection)]
+        self._text_surfs = None
         self._size = None # should contain the size according to self.rank
 
         self.set_rank(rank) # init self.rank, self.size and self.surfs
@@ -385,20 +394,67 @@ class Link(GraphObject):
         return Link.rank_sizes[rank]
 
     def update_rank(self):
-
-    # get the "_" character width, useful later on
         """Triggered for all links when a point changes rank, to update their rank"""
         if self.p2 is None: self.rank = self.p1.rank
         else: self.rank = max(self.p1.rank, self.p2.rank)
 
         self._size = Link.get_rank_size(self.rank)
 
+    def collide(self, mpos):
+        """Checks if the link collides with the mouse, with self._size tolerance.
+        How it works:
+        Let p1 and p2 be the two link ends once projected into screen space, and M the mouse pos.
+        Let (D) be the line between p1 and p2, and M' the approximation of M projected onto (D).
+        M' is hence the point in (D) that is at the same distance from p1 as M.
+
+        The goal of this method is to compute the distance (squared) between M' and M,
+        and compare it to self._size (squared). If the former is smaller, a collision is registered.
+
+        During the calculation, we compute t, directional vector of (D). If t is not in [0, 1],
+        the projected point is outside the segment of (D) that sits between p1 and p2,
+        hence there is no collision in this case.
+
+        In case p1 == p2, the line formed by the link is treated as a circle of radius self._size
+        for collision checks. This shouldn't usually matter as the ends of the links are points
+        and their collision detection runs first in Graph.update.
+        """
+        x1, y1 = graph.get_pos(self.p1.x, self.p1.y)
+        x2, y2 = graph.get_pos(self.p2.x, self.p2.y)
+        xm, ym = mpos
+        s2 = self._size*self._size
+        if x1 == x2 and y1 == y2:
+            dx, dy = xm-x1, ym-y1
+            return dx*dx + dy*dy <= s2
+
+        # calculate t
+        dx, dy = xm-x1, ym-y1
+        p1_m = dx*dx + dy*dy
+        dx, dy = x2-x2, y2-y1
+        p1_p2 = dx*dx + dy*dy
+        t = sqrt(p1_m/p1_p2)
+        if t < 0 or t > 1: return False
+
+        # calculate M' position
+        xm2, ym2 = x1 + dx*t, y1 + dy*t
+
+        dx, dy = xm-xm2, ym-ym2
+        return dx*dx + dy*dy <= s2
+
     def update(self, events):
         """Called by grah update() each frame"""
+
+        # get end points screen coordinates
         pos1 = graph.get_pos(self.p1.x, self.p1.y)
-        if self.p2 is None: pos2 = pygame.mouse.get_pos()
+        if self.p2 is None:
+            # the link is currently being drawn
+            pos2 = pygame.mouse.get_pos()
         else: pos2 = graph.get_pos(self.p2.x, self.p2.y)
-        pygame.draw.line(screen, Palette.link, pos1, pos2, self._size)
+
+        # get color depending on if the link is hovered/selected
+        col = Palette.link[2 if self == graph.selection else 1 if self == graph.hovered else 0]
+        pygame.draw.line(screen, col, pos1, pos2, self._size)
+
+        #graph.debug(
 
 class Image:
     """Pygame surface loaded from image file"""
@@ -412,7 +468,8 @@ class UI:
     """UI elements on top of the screen: help, info about selection"""
     def __init__(self):
         self.surf = pygame.Surface((Graph.W, 40), SRCALPHA) # blitted, cached surface
-        self.text = ['P: new point, S: save file, O: open file, I: load image, Z: reset zoom']
+        self.text = ['P: new point, S: save file, O: open file, I: load image, Z: reset zoom',
+                     'Del: delete link']
         # edit texts to discriminate between deleting a point, its image or its text
         text = 'L: start link, I: add image, T: add text, Del: %s, Z: cycle rank'
         self.text.append(text %'delete point')
@@ -428,8 +485,10 @@ class UI:
 
         if graph.selection is None:
             self.surf.blit(self.text[0], (12, 12))
+        elif type(graph.selection) == Link:
+            self.surf.blit(self.text[1], (12, 12))
         elif type(graph.selection) == Point:
-            i = 3 if graph.selection.image is not None else 2 if graph.selection.text is not None else 1
+            i = 4 if graph.selection.image is not None else 3 if graph.selection.text is not None else 2
             self.surf.blit(self.text[i], (12, 12))
 
     def update(self):
@@ -442,6 +501,8 @@ class Graph:
     H = 500
 
     def __init__(self):
+        assert Palette.init
+
         self.scroll_x = 0
         self.scroll_y = 0
         self.zoom = 1
@@ -459,6 +520,31 @@ class Graph:
         self.link = None # if link in construction, store it here, else None
 
         self.ui = UI()
+
+        # debug information
+        self._debug_surf = None
+
+    def debug(self, *args):
+        """Adds debug information to be displayed in self.update, deprecated unless in development.
+        *args: many arguments that will be added to the debug string with space separators.
+        There should not be newlines in there, artifacts can appear."""
+        text = ' '.join(str(a) for a in args)
+        width = len(text)*char_w
+
+        if self._debug_surf is None:
+            # create new Surface
+            self._debug_surf = pygame.Surface((width, 16))
+            y = 0
+        else:
+            # append text in a new line
+            w, h = self._debug_surf.get_size()
+            width = max(width, w)
+            surf = pygame.Surface((width, h+16))
+            surf.blit(self._debug_surf, (0, 0))
+            self._debug_surf = surf
+            y = h
+
+        self._debug_surf.blit(font.render(text, (0, y)))
 
     def open(self, save_file):
         """Sets self.save_file and loads save file"""
@@ -587,14 +673,15 @@ class Graph:
                 visible_l.append(link)
  
         self.hovered = None
-        self.hovered_l = None
         for point in visible_p:
             if point.collide(mpos):
                 self.hovered = point
                 break
         for link in visible_l:
-            if self.hovered is not None: break
-            if point.collide(mpos): self.hovered_l = link
+            # don't select a link if something else has been selected,
+            # or if currently creating a link
+            if self.hovered is not None or self.link is not None: break
+            if link.collide(mpos): self.hovered = link
 
         # events check
         for event in events:
@@ -678,6 +765,10 @@ class Graph:
                                 del Manager.links[link]
                             self.selection = None
                         self.select(self.selection) # update self.ui
+                elif type(self.selection) == Link:
+                    if event.key == K_DELETE:
+                        del Manager.links[self.selection.id]
+                        self.select(None)
 
         if self.drag_start is not None:
             x, y = self.drag_start
@@ -686,12 +777,12 @@ class Graph:
             m = 1/self.zoom/self.unit_size
             dx = (x0-x1) * m
             dy = (y0-y1) * m
-            if self.selection is None:
-                self.scroll_x = x + dx
-                self.scroll_y = y + dy
-            else:
+            if type(self.selection) == Point:
                 self.selection.x = x - dx
                 self.selection.y = y - dy
+            else:
+                self.scroll_x = x + dx
+                self.scroll_y = y + dy
 
         # update and render menu and UI
         screen.fill(Palette.background)
@@ -700,6 +791,11 @@ class Graph:
         # update and render graph objects
         for link in visible_l: link.update(events)
         for point in visible_p: point.update(events)
+
+        # display debug screen if needed
+        if self._debug_surf is not None:
+            screen.blit(self._debug_surf, (0, 0))
+            self._debug_surf = None
 
 FPS = 60
 pygame.init()

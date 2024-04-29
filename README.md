@@ -35,6 +35,7 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 ## TODO
 - Escape to exit popups
 - Select and delete links
+- Link selection feedback
 - Points states and colors + for links + edit readme
 - Be more generous for displaying visible objects
 - Only save used images

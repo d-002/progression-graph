@@ -28,14 +28,14 @@ Pressing Delete will detach the image from a point, or remove its text, or delet
 ## Save files format
 - `P x y r s id`: creates a new point at coordinates (x, y), of rank r, states and with ID *id*
 - `L p1 p2 id`: creates a new link with ID *id*, attached to points of IDs *p1* and *p2*. These points should have been created before.
-- `I name id`: loads an image from cached image *name* in `images/` into image object with ID *id*
+- `I name id`: loads an image from the images in the zip file into image object with ID *id*
 - `Ai p i`: attaches the image of ID *i* to point of ID *p*
 - `At p text`: attaches text to the point of ID *p*
 - `# comment`: comment
+- `_S x y`: puts the camera at position (x, y) in the unit coordinate system
+- `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01
 
 ## TODO
-- Save to new file, force it when no save file name
-- Scroll position and zoom in save file
-- Zip file for save, copy images in it. Delete them if not used
+- Zip file faster load/save: use diff
 - Upload to png, transparent background option. Image with margin around elements, zoom 1
 - Change images and sizes on zoom

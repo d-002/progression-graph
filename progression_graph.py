@@ -1,5 +1,6 @@
 import os
 import pygame
+from zipfile import ZipFile
 from math import sqrt
 from os.path import exists, splitext, basename
 from pygame.locals import *
@@ -146,7 +147,8 @@ def import_image():
     if type(files) == tuple and len(files): # double protection in case API changes
         for file in files:
             try:
-                Manager.new_image(file)
+                # None to tell the constructor that the image comes from the disk
+                Manager.new_image(file, None)
             except:
                 print('Error loading image')
 
@@ -154,14 +156,14 @@ def ask_filename(new=False):
     """Triggers a filedialog to select a save file, and returns the file.
     If new is set to True, the function will be used for choosing a new file name."""
 
-    filetype = (('Progression Graph File', '.txt'),)
+    filetype = (('Progression Graph File', '.graph'),)
 
     if new:
         file = asksaveasfilename(title='Save to file', filetypes=filetype)
 
         # make sure the file has the right extension
         if file == '': return file
-        if not file.endswith('.txt'): file += '.txt'
+        if not file.endswith('.graph'): file += '.graph'
         return file
 
     return askopenfilename(title='Open save file', filetypes=filetype)
@@ -170,8 +172,8 @@ def image_selector():
     """Graphical image selector, displays all loaded images into a grid for the user to select"""
 
     # get and resize all loaded images
-    images = list(Manager.images.values())*100
-    ids = list(Manager.images.keys())*100
+    images = list(Manager.images.values())
+    ids = list(Manager.images.keys())
     for i, image in enumerate(images):
         surf = image.surf
         w, h = surf.get_size()
@@ -287,8 +289,7 @@ class Button:
         return res
 
 class Error:
-    """Static class, used to make handling exceptions easier
-    TODO: add buttons to create popups"""
+    """Static class, used to make handling exceptions easier"""
 
     @staticmethod
     def syntax(y, expression):
@@ -299,6 +300,11 @@ class Error:
     def corrupted_file(comment):
         """Used when a non-critical file parsing error has been found. This doesn't interrupt file loading."""
         ask_button('Detected save file corruption:\n"%s"\nThe will will still be loaded, check for side-effects.' %comment, [(0, 'OK')])
+
+    @staticmethod
+    def zipfile(error):
+        """Used when an error occurs while loading the save zip file"""
+        ask_button('Error while parsing for files in the save file:\n"%s"\nAborting file loading' %error, [(0, 'OK')])
 
 class Palette:
     """Static class, used to store colors data"""
@@ -384,8 +390,8 @@ class Manager:
         return Manager.new_obj((p1, p2), Link, Manager.links, id)
 
     @staticmethod
-    def new_image(name, id=None):
-        return Manager.new_obj((name,), Image, Manager.images, id)
+    def new_image(name, content, id=None):
+        return Manager.new_obj((name, content), Image, Manager.images, id)
 
     @staticmethod
     def attach_image(point_id, image_id):
@@ -661,15 +667,32 @@ class Link(GraphObject):
         pygame.draw.line(screen, col, pos1, pos2, self._size)
 
 class Image:
-    """Pygame surface loaded from image file"""
-    def __init__(self, path, id):
-        self.name = splitext(basename(path))[0]
-        self.path = path
-        self.surf = pygame.image.load(path)
+    """Pygame surface loaded from image file.
+    The stored path is cut to the base name, to then be cached in the save zip file."""
+
+    def __init__(self, path, content, id):
+        """Loads an image from the save zip file (content is a bytes array)
+        or from the disk (content is None, and path is used to load the image)"""
+
+        self.path = basename(path)
+        self.name = splitext(self.path)[0]
+        if content is None:
+            # load image from disk
+            self.surf = pygame.image.load(path).convert_alpha()
+        else:
+            # get the width, height, and image data from content
+            i = content.index(b'.')
+            w = int(content[:i].decode())
+            content = content[i+1:]
+            i = content.index(b'.')
+            h = int(content[:i].decode())
+            content = content[i+1:]
+            self.surf = pygame.image.frombytes(content, (w, h), 'RGBA')
         self.id = id
 
 class UI:
     """UI elements on top of the screen: help, info about selection"""
+
     def __init__(self):
         self.surf = None # blitted, cached surface
         texts = [('Left click: select elements, S: save file, W: save as file, N: new file, O: open file,', 'P: new point, I: import image, Z: reset zoom, Q: quit'),
@@ -724,6 +747,8 @@ class Graph:
     """Graph manager, for displaying the graph, handling scroll, and updating elements"""
     W = 900
     H = 500
+
+    min_z = 0.01
 
     def __init__(self):
         assert Palette.init
@@ -782,7 +807,21 @@ class Graph:
         Manager.reset()
 
         success = True
-        with open(save_file) as f: lines = f.read().split('\n')
+        try:
+            lines = [] # in case there's an error and it doesn't get defined
+
+            other_files = {} # file name: content
+            with ZipFile(save_file) as z:
+                lines = z.read('save.txt').decode().split('\n')
+                for file in z.filelist:
+                    file = file.filename
+                    if file != 'save.txt':
+                        other_files[file] = z.read(file)
+
+        except Exception as e:
+            Error.zipfile(e)
+            success = False
+
         for y, raw in enumerate(lines):
             # format line: remove leading and trailing spaces, double spaces, comments
             line = ''
@@ -823,8 +862,10 @@ class Graph:
                         Error.syntax(y, raw)
                         success = False
                     try:
-                        Manager.new_image(*args)
-                    except:
+                        name, id = args
+                        content = other_files[name]
+                        Manager.new_image(name, content, id)
+                    except 1:
                         Error.corrupted_file('wrong image values: '+raw)
                         success = False
                 case 'Ai': # attach an image to a point
@@ -862,9 +903,13 @@ class Graph:
                         self.zoom = float(args[0])
                     except:
                         Error.corrupted_file('invalid zoom value')
-                    if self.zoom <= 0: # forbidden values: reset zoom
-                        self.zoom = 1
-                case _: Error.syntax(y, raw)
+                    if self.zoom < Graph.min_z: # forbidden values: reset zoom
+                        self.zoom = Graph.min_z
+                case _:
+                    Error.syntax(y, raw)
+                    success = False
+
+            if not success: break
 
         if success:
             self.open_successful(save_file)
@@ -927,9 +972,11 @@ class Graph:
 
         # images attached to points
         content += ('', '# LINK IMAGES')
+        used_image_ids = []
         for id, point in Manager.points.items():
             if point.image is not None:
                 content.append('Ai %d %d' %(id, point.image.id))
+                used_image_ids.append(point.image.id)
 
         # text attached to points
         content += ('', '# TEXT')
@@ -937,8 +984,17 @@ class Graph:
             if point.text is not None:
                 content.append('At %d %s' %(id, point.text))
 
-        # save into file
-        with open(self.save_file, 'w') as f: f.write('\n'.join(content)+'\n')
+        # save into zip file
+        with ZipFile(self.save_file, 'w') as z:
+            # add the main save file into the zip file
+            z.writestr('save.txt', '\n'.join(content)+'\n')
+
+            # encode the width, height and image data into image files
+            for id in used_image_ids:
+                image = Manager.images[id]
+                w, h = image.surf.get_size()
+                content = b'%d.%d.%s' %(w, h, pygame.image.tostring(image.surf, 'RGBA'))
+                z.writestr(image.path, content)
 
         self.changes = False
         set_title(self.save_file)
@@ -1040,8 +1096,8 @@ class Graph:
             elif event.type == MOUSEWHEEL and not pressed:
                 if event.y > 0: self.zoom *= 1.2 # zoom inif not changes or want_to_save() is not None:
                             
-                elif self.zoom > 0.01: self.zoom /= 1.2 # zoom out
-                else: self.zoom = 0.01 # min zoom
+                elif self.zoom > Graph.min_z: self.zoom /= 1.2 # zoom out
+                else: self.zoom = Graph.min_z # min zoom
                 change = True
 
             # keys
@@ -1175,7 +1231,7 @@ def want_to_save():
     return ask_button('You have unsaved changes. Do you want to save?', [(0, 'Yes'), (1, 'No'), (None, 'Cancel')])
 
 def quit_app():
-    """Displays a save and quit? popup if made changes [TODO].
+    """Displays a save and quit? popup if made changes.
     Returns True if the window should be closed, otherwise False."""
     global run
 

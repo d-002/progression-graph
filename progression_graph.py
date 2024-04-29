@@ -5,7 +5,7 @@ from os.path import exists, splitext, basename
 from pygame.locals import *
 
 from tkinter import Tk
-from tkinter.filedialog import askopenfilename
+from tkinter.filedialog import askopenfilename, asksaveasfilename
 
 def get_popup_bg(message):
     """Creates the base for a popup. Returns the created background from a message string."""
@@ -149,6 +149,22 @@ def import_image():
                 Manager.new_image(file)
             except:
                 print('Error loading image')
+
+def ask_filename(new=False):
+    """Triggers a filedialog to select a save file, and returns the file.
+    If new is set to True, the function will be used for choosing a new file name."""
+
+    filetype = (('Progression Graph File', '.txt'),)
+
+    if new:
+        file = asksaveasfilename(title='Save to file', filetypes=filetype)
+
+        # make sure the file has the right extension
+        if file == '': return file
+        if not file.endswith('.txt'): file += '.txt'
+        return file
+
+    return askopenfilename(title='Open save file', filetypes=filetype)
 
 def image_selector():
     """Graphical image selector, displays all loaded images into a grid for the user to select"""
@@ -761,7 +777,8 @@ class Graph:
         """Sets self.save_file and loads save file"""
 
         # make a backup in case something goes wrong and the file fails to open
-        backup = [dict(Manager.points), dict(Manager.links), dict(Manager.images)]
+        backup = [dict(Manager.points), dict(Manager.links), dict(Manager.images),
+                  self.scroll_x, self.scroll_y, self.zoom]
         Manager.reset()
 
         success = True
@@ -786,32 +803,67 @@ class Graph:
             # execute action depending on command
             match cmd:
                 case 'P': # add new point
-                    if len(args) != 5: Error.syntax(y, raw)
-                    Manager.new_point(*args)
+                    if len(args) != 5:
+                        Error.syntax(y, raw)
+                        success = False
+                    try:
+                        Manager.new_point(*args)
+                    except:
+                        Error.corrupted_file('wrong point values: '+raw)
                 case 'L': # add new link
-                    if len(args) != 3: Error.syntax(y, raw)
-                    Manager.new_link(*args)
+                    if len(args) != 3:
+                        Error.syntax(y, raw)
+                        success = False
+                    try:
+                        Manager.new_link(*args)
+                    except:
+                        Error.corrupted_file('wrong link values: '+raw)
                 case 'I': # add new image
-                    if len(args) != 2: Error.syntax(y, raw)
+                    if len(args) != 2:
+                        Error.syntax(y, raw)
+                        success = False
                     try:
                         Manager.new_image(*args)
                     except:
-                        Error.corrupted_file(args[0]+' not found')
+                        Error.corrupted_file('wrong image values: '+raw)
                         success = False
                 case 'Ai': # attach an image to a point
-                    if len(args) != 2: Error.syntax(y, raw)
+                    if len(args) != 2:
+                        Error.syntax(y, raw)
+                        success = False
                     try:
                         Manager.attach_image(*args)
                     except:
-                        Error.corrupted_file('could not attach image of ID '+args[1])
+                        Error.corrupted_file('error while attaching image: '+raw)
                         success = False
                 case 'At': # attach text to a point
-                    if len(args) != 2: Error.syntax(y, raw)
+                    if len(args) != 2:
+                        Error.syntax(y, raw)
+                        success = False
                     try:
                         Manager.attach_text(*args)
                     except:
-                        Error.corrupted_file('error while attaching text')
+                        Error.corrupted_file('error while attaching text: '+raw)
                         success = False
+
+                case '_S':
+                    if len(args) != 2:
+                        Error.syntax(y, raw)
+                        success = False
+                    try:
+                        self.scroll_x, self.scroll_y = float(args[0]), float(args[1])
+                    except:
+                        Error.corrupted_file('invalid scroll position')
+                case '_Z':
+                    if len(args) != 1:
+                        Error.syntax(y, raw)
+                        success = False
+                    try:
+                        self.zoom = float(args[0])
+                    except:
+                        Error.corrupted_file('invalid zoom value')
+                    if self.zoom <= 0: # forbidden values: reset zoom
+                        self.zoom = 1
                 case _: Error.syntax(y, raw)
 
         if success:
@@ -823,7 +875,7 @@ class Graph:
             del Manager.links
             del Manager.images
             del Manager.points # points last because then they no longer have any references
-            Manager.points, Manager.links, Manager.images = backup
+            Manager.points, Manager.links, Manager.images, self.scroll_x, self.scroll_y, self.zoom = backup
 
     def open_successful(self, save_file):
         """If opening a file was successful, prepare graph (reset variables)"""
@@ -842,12 +894,16 @@ class Graph:
 
     def save(self):
         """Saves graph contents into self.save_file"""
-        content = []
 
         if self.save_file is None: raise ValueError('No save loaded')
 
+        # general information
+        content = ['# GENERAL INFO',
+                   '_S %f %f' %(self.scroll_x, self.scroll_y),
+                   '_Z %f' %(self.zoom)]
+
         # points
-        content.append('# POINTS')
+        content += ('', '# POINTS')
         for id, point in Manager.points.items():
             content.append('P %f %f %d %d %d' %(point.x, point.y, point.rank, point.state, id))
 
@@ -886,6 +942,19 @@ class Graph:
 
         self.changes = False
         set_title(self.save_file)
+
+    def newfile(self):
+        del Manager.links
+        del Manager.images
+        del Manager.points
+        Manager.points, Manager.links, Manager.images = {}, {}, {}
+        self.open_successful()
+
+    def saveas(self):
+        file = ask_filename(True)
+        if file != '':
+            self.save_file = file
+            self.save()
 
     def get_pos(self, x, y):
         """Returns the position, in screen coordinates, corresponding to a position in graph coordinates"""
@@ -969,7 +1038,8 @@ class Graph:
 
             # zoom
             elif event.type == MOUSEWHEEL and not pressed:
-                if event.y > 0: self.zoom *= 1.2 # zoom in
+                if event.y > 0: self.zoom *= 1.2 # zoom inif not changes or want_to_save() is not None:
+                            
                 elif self.zoom > 0.01: self.zoom /= 1.2 # zoom out
                 else: self.zoom = 0.01 # min zoom
                 change = True
@@ -998,10 +1068,17 @@ class Graph:
                         Manager.new_point(*self.from_pos(*mpos), 0, 0)
                         change = True
                     elif event.key == K_s:
-                        self.save()
+                        if self.save_file is None: self.saveas()
+                        else: self.save()
+                    elif event.key == K_w:
+                        self.saveas()
+                    elif event.key == K_n:
+                        if not self.changes or want_to_save() is not None:
+                            self.newfile()
                     elif event.key == K_o:
-                        path = askopenfilename(title='Open save file', filetypes=(('Progression Graph File', '.txt'),))
-                        if path != '': self.open(path)
+                        if not self.changes or want_to_save() is not None:
+                            path = ask_filename()
+                            if path != '': self.open(path)
                     elif event.key == K_i:
                         import_image()
 
@@ -1084,6 +1161,9 @@ class Graph:
 def set_title(name, unsaved=False):
     """Sets the title of the pygame application"""
 
+    if name is None:
+        name = '[no file]'
+        unsaved = True
     if unsaved: name = '*%s*' %name
     pygame.display.set_caption('Progression Graph - '+name)
 
@@ -1110,7 +1190,7 @@ FPS = 60
 pygame.init()
 
 screen = pygame.display.set_mode((Graph.W, Graph.H))
-set_title('')
+set_title(None)
 font = pygame.font.SysFont('consolas', 16)
 font2 = pygame.font.SysFont('consolas', 12)
 clock = pygame.time.Clock()
@@ -1121,7 +1201,6 @@ char_w = font.render('_', True, Palette.text).get_width()
 char_w2 = font2.render('_', True, Palette.text).get_width()
 
 graph = Graph()
-graph.open('test_save.txt')
 
 dt = 0 # time passed in last frame, in seconds
 run = True

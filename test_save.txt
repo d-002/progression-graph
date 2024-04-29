@@ -1,3 +1,7 @@
+# GENERAL INFO
+_S 0.094172 -0.022878
+_Z 1.200000
+
 # POINTS
 P -0.880000 0.450000 2 2 0
 P 1.100000 -0.200000 3 0 1
@@ -6,7 +10,7 @@ P 1.100000 -0.200000 3 0 1
 L 0 1 0
 
 # IMAGES
-I C:/Users/PC/Pictures/textures/item/diamond.pn 0
+I C:/Users/PC/Pictures/textures/item/diamond.png 0
 
 # LINK IMAGES
 Ai 0 0

@@ -201,6 +201,9 @@ def image_selector():
                 scroll = min(max(scroll - 20*event.y, 0), iheight-vheight)
             elif event.type == MOUSEBUTTONDOWN and selection is not None:
                 run = False # clicked on an image
+            elif event.type == KEYDOWN and event.key == K_ESCAPE:
+                run = False
+                res = None
 
         screen.fill(Palette.background)
 
@@ -311,7 +314,7 @@ class Palette:
     neutral = (80, 80, 85)
     red = (255, 0, 0)
 
-    # States base colors. Points and links colors are derived from them
+    # States base colors. Nodes and links colors are derived from them
     _states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
 
     link = [None]*3 # contains a nested list: [[todo normal, todo hovered, todo selected], [doing], [completed]]
@@ -330,7 +333,7 @@ class Palette:
             # init link colors
             Palette.link[i] = (col, Palette.mult(col, 0.6, 127), Palette.mult(col, 0.3, 192))
 
-            # init point colors
+            # init node colors
             Palette.box_outer[i] = (Palette.mult(col, 0.4, 50), Palette.mult(col, 0.4, 60), Palette.mult(col, 0.4, 80))
             Palette.box_sep[i] = (Palette.mult(col, 0.2, 0), Palette.mult(col, 0.2, 20), Palette.mult(col, 0.2, 40))
             Palette.box_inner[i] = (Palette.mult(col, 0.3, 100), Palette.mult(col, 0.3, 120), Palette.mult(col, 0.3, 150))
@@ -353,7 +356,7 @@ class Manager:
     """Manager for all objects. Should be used to create and remove new objects, as it manages the ID system."""
 
     # key: ID, value: object
-    points = {}
+    nodes = {}
     links = {}
     images = {}
 
@@ -369,41 +372,41 @@ class Manager:
         return _dict[id]
 
     @staticmethod
-    def new_point(x, y, rank, state, id=None):
-        result = Manager.new_obj((float(x), float(y), int(rank), int(state)), Point, Manager.points, id)
+    def new_node(x, y, rank, state, id=None):
+        result = Manager.new_obj((float(x), float(y), int(rank), int(state)), Node, Manager.nodes, id)
 
-        # sort points to display the more important ones on top
-        keys = sorted(Manager.points.keys(), key=lambda key: Manager.points[key].rank)
-        copy = dict(Manager.points)
-        Manager.points = {}
+        # sort nodes to display the more important ones on top
+        keys = sorted(Manager.nodes.keys(), key=lambda key: Manager.nodes[key].rank)
+        copy = dict(Manager.nodes)
+        Manager.nodes = {}
         for key in keys:
-            Manager.points[key] = copy[key]
+            Manager.nodes[key] = copy[key]
 
         return result
 
     @staticmethod
-    def new_link(p1, p2, id=None):
-        p1 = Manager.points[int(p1)]
-        p2 = None if p2 is None else Manager.points[int(p2)]
-        return Manager.new_obj((p1, p2), Link, Manager.links, id)
+    def new_link(n1, n2, id=None):
+        n1 = Manager.nodes[int(n1)]
+        n2 = None if n2 is None else Manager.nodes[int(n2)]
+        return Manager.new_obj((n1, n2), Link, Manager.links, id)
 
     @staticmethod
     def new_image(name, content, id=None):
         return Manager.new_obj((name, content), Image, Manager.images, id)
 
     @staticmethod
-    def attach_image(point_id, image_id):
-        """Sets the image reference of a point"""
-        Manager.points[int(point_id)].set_image(Manager.images[int(image_id)])
+    def attach_image(node_id, image_id):
+        """Sets the image reference of a node"""
+        Manager.node[int(node_id)].set_image(Manager.images[int(image_id)])
 
     @staticmethod
-    def attach_text(point_id, text):
-        """Sets the text of a point"""
-        Manager.points[int(point_id)].set_text(None if text == '' else text)
+    def attach_text(node_id, text):
+        """Sets the text of a node"""
+        Manager.nodes[int(node_id)].set_text(None if text == '' else text)
 
     @staticmethod
     def reset():
-        Manager.points = {}
+        Manager.node = {}
         Manager.links = {}
         Manager.images = {}
 
@@ -414,8 +417,8 @@ class GraphObject:
     def collide(self, pos):
         raise NotImplementedError
 
-class Point(GraphObject):
-    """Point in the graph, can be attached to various links and have text and an image"""
+class Node(GraphObject):
+    """Node in the graph, can be attached to various links and have text and an image"""
     N_RANKS = 5
     rank_sizes = [40, 50, 60, 80, 100]
     assert len(rank_sizes) == N_RANKS
@@ -439,22 +442,22 @@ class Point(GraphObject):
 
     @staticmethod
     def get_rank_size(rank):
-        """Returns the size from a particular point rank, handles incorrect values"""
-        rank = min(max(rank, 0), Point.N_RANKS-1)
-        return Point.rank_sizes[rank]
+        """Returns the size from a particular node rank, handles incorrect values"""
+        rank = min(max(rank, 0), Node.N_RANKS-1)
+        return Node.rank_sizes[rank]
 
     def set_rank(self, rank):
         self.rank = rank
-        self._size = Point.get_rank_size(rank)
+        self._size = Node.get_rank_size(rank)
         self.set_image(self.image)
 
         # update attached links
         for link in Manager.links.values():
-            if self == link.p1 or self == link.p2:
+            if self == link.n1 or self == link.n2:
                 link.refresh()
 
     def cycle_rank(self):
-        self.set_rank((self.rank+1) % Point.N_RANKS)
+        self.set_rank((self.rank+1) % Node.N_RANKS)
 
     def cycle_state(self):
         # order: todo, completed, doing
@@ -462,7 +465,7 @@ class Point(GraphObject):
         self.set_image(self.image) # update self._surf
 
         for link in Manager.links.values():
-            if self == link.p1 or self == link.p2:
+            if self == link.n1 or self == link.n2:
                 link.refresh()
 
     @staticmethod
@@ -479,7 +482,7 @@ class Point(GraphObject):
         return new
 
     def set_text(self, text):
-        """Sets the point's text and updates its text Surface"""
+        """Sets the node's text and updates its text Surface"""
         self.text = text
         if text is None:
             self._text_surfs = None
@@ -488,7 +491,7 @@ class Point(GraphObject):
             if len(text)*char_w2 > max_width:
                 # make unselected surface: cut text
                 surf = font2.render(text[:int(max_width/char_w2)-3]+'...', True, Palette.text)
-                self._text_surfs = [Point.black_back(surf), None]
+                self._text_surfs = [Node.black_back(surf), None]
 
                 # make selected surface: word wrap if necessary
                 # get words and split them if bigger than max_width
@@ -520,10 +523,10 @@ class Point(GraphObject):
                     line = font2.render(line, True, Palette.text)
                     surf.blit(line, (width/2 - line.get_width()/2, y*12))
 
-                self._text_surfs[1] = Point.black_back(surf)
+                self._text_surfs[1] = Node.black_back(surf)
             else:
                 # same text for both unselected and selected
-                surf = Point.black_back(font2.render(text, True, Palette.text))
+                surf = Node.black_back(font2.render(text, True, Palette.text))
                 self._text_surfs = [surf, surf]
 
     def set_image(self, image):
@@ -554,7 +557,7 @@ class Point(GraphObject):
                 self._surfs[i].blit(image, (m+1, m+1))
 
     def collide(self, pos):
-        """Checks if the given position in screen coordinates intersects with the point"""
+        """Checks if the given position in screen coordinates intersects with the node"""
         x, y = graph.get_pos(self.x, self.y)
         s = self._size/2
         return x-s < pos[0] < x+s and y-s < pos[1] < y+s
@@ -579,40 +582,40 @@ class Point(GraphObject):
             surf.blit(t, (x - t.get_width()/2, y + self._size/2 + 5))
 
 class Link(GraphObject):
-    """Link between two points in the graph"""
+    """Link between two nodes in the graph"""
 
     rank_sizes = [2, 3, 5, 8, 15]
-    assert len(rank_sizes) == Point.N_RANKS
+    assert len(rank_sizes) == Node.N_RANKS
 
-    def __init__(self, p1, p2, id):
+    def __init__(self, n1, n2, id):
         self.id = id
 
-        # linked points
-        self.p1 = p1
-        self.p2 = p2 # can be None if just created
+        # linked nodes
+        self.n1 = n1
+        self.n2 = n2 # can be None if just created
 
         self.refresh() # set self.rank, self.size and self._state
 
     @staticmethod
     def get_rank_size(rank):
         """Returns the size from a particular link rank, handles incorrect values"""
-        rank = min(max(rank, 0), Point.N_RANKS-1)
+        rank = min(max(rank, 0), Node.N_RANKS-1)
         return Link.rank_sizes[rank]
 
     def refresh(self):
-        """Triggered for all links when a point changes rank or state, to update the link's properties"""
-        if self.p2 is None: self.rank = self.p1.rank
-        else: self.rank = max(self.p1.rank, self.p2.rank)
+        """Triggered for all links when a node changes rank or state, to update the link's properties"""
+        if self.n2 is None: self.rank = self.n1.rank
+        else: self.rank = max(self.n1.rank, self.n2.rank)
 
         self._size = Link.get_rank_size(self.rank)
 
-        if self.p2 is None: self._state = self.p1.state
-        else: self._state = max(self.p1.state, self.p2.state)
+        if self.n2 is None: self._state = self.n1.state
+        else: self._state = max(self.n1.state, self.n2.state)
 
     def collide(self, mpos):
         """Checks if the link collides with the mouse, with self._size tolerance.
         How it works:
-        Let p1 and p2 be the two link ends once projected into screen space, and M the mouse pos.
+        Let p1 and p2 be the two link end points once projected into screen space, and M the mouse pos.
         Let (D) be the line between p1 and p2, and M' the approximation of M projected onto (D).
         M' is hence the point in (D) that is at the same distance from p1 as M.
 
@@ -624,11 +627,11 @@ class Link(GraphObject):
         hence there is no collision in this case.
 
         In case p1 == p2, the line formed by the link is treated as a circle of radius self._size
-        for collision checks. This shouldn't usually matter as the ends of the links are points
+        for collision checks. This shouldn't usually matter as the ends of the links are nodes
         and their collision detection runs first in Graph.update.
         """
-        x1, y1 = graph.get_pos(self.p1.x, self.p1.y)
-        x2, y2 = graph.get_pos(self.p2.x, self.p2.y)
+        x1, y1 = graph.get_pos(self.n1.x, self.n1.y)
+        x2, y2 = graph.get_pos(self.n2.x, self.n2.y)
         xm, ym = mpos
         s2 = self._size*self._size
         if x1 == x2 and y1 == y2:
@@ -652,12 +655,12 @@ class Link(GraphObject):
     def update(self, events, surf, project):
         """Called by grah update() each frame. Draws a line onto surf at the position given by the projector."""
 
-        # get end points screen coordinates
-        pos1 = project(self.p1.x, self.p1.y)
-        if self.p2 is None:
+        # get end nodes screen coordinates
+        pos1 = project(self.n1.x, self.n1.y)
+        if self.n2 is None:
             # the link is currently being drawn
             pos2 = pygame.mouse.get_pos()
-        else: pos2 = project(self.p2.x, self.p2.y)
+        else: pos2 = project(self.n2.x, self.n2.y)
 
         # get color depending on if the link is hovered/selected
         i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
@@ -694,11 +697,11 @@ class UI:
     def __init__(self):
         self.surf = None # blitted, cached surface
         texts = [('Click: select elements, drag with mouse: move/scroll, scroll: zoom, S: save file, W: save as file,',
-                  'N: new file, O: open file, P: new point, I: import image, Z: reset zoom, E: export graph to image,', 'F: export with background, Q: quit'),
+                  'N: new file, O: open file, P: new node, I: import image, Z: reset zoom, E: export graph to image,', 'F: export with background, Q: quit'),
                  'Del: delete link']
-        # edit texts to discriminate between deleting a point, its image or its text
+        # edit texts to discriminate between deleting a node, its image or its text
         text = 'L: start link, I: add image, T: add text, Del: delete %s, R: cycle rank, C: cycle state'
-        texts.append(text %'point')
+        texts.append(text %'node')
         texts.append(text %"text")
         texts.append(text %"image")
 
@@ -729,7 +732,7 @@ class UI:
             text = self.text[0]
         elif type(graph.selection) == Link:
             text = self.text[1]
-        elif type(graph.selection) == Point:
+        elif type(graph.selection) == Node:
             text = self.text[4 if graph.selection.image is not None else 3 if graph.selection.text is not None else 2]
 
         h = 24 + text.get_height()
@@ -763,9 +766,8 @@ class Graph:
         self.drag_start = None # moved/scroll element pos when drag started
         self.drag_mouse_start = None # mouse pos when drag started
 
-        self.selection = None # selected GraphPoint, or None if no selection
-        self.hovered = None # hovered Graphpoint
-        self.hovered = None # hovered Link (separate them to avoid issues when drawing a link)
+        self.selection = None # selected Graph object, or None if no selection
+        self.hovered = None # hovered Graph object
         self.link = None # if link in construction, store it here, else None
 
         self.ui = UI()
@@ -801,7 +803,7 @@ class Graph:
         """Sets self.save_file and loads save file"""
 
         # make a backup in case something goes wrong and the file fails to open
-        backup = [dict(Manager.points), dict(Manager.links), dict(Manager.images),
+        backup = [dict(Manager.nodes), dict(Manager.links), dict(Manager.images),
                   self.scroll_x, self.scroll_y, self.zoom]
         Manager.reset()
 
@@ -840,14 +842,14 @@ class Graph:
 
             # execute action depending on command
             match cmd:
-                case 'P': # add new point
+                case 'P': # add new node
                     if len(args) != 5:
                         Error.syntax(y, raw)
                         success = False
                     try:
-                        Manager.new_point(*args)
+                        Manager.new_node(*args)
                     except:
-                        Error.corrupted_file('wrong point values: '+raw)
+                        Error.corrupted_file('wrong node values: '+raw)
                 case 'L': # add new link
                     if len(args) != 3:
                         Error.syntax(y, raw)
@@ -867,7 +869,7 @@ class Graph:
                     except 1:
                         Error.corrupted_file('wrong image values: '+raw)
                         success = False
-                case 'Ai': # attach an image to a point
+                case 'Ai': # attach an image to a node
                     if len(args) != 2:
                         Error.syntax(y, raw)
                         success = False
@@ -876,7 +878,7 @@ class Graph:
                     except:
                         Error.corrupted_file('error while attaching image: '+raw)
                         success = False
-                case 'At': # attach text to a point
+                case 'At': # attach text to a node
                     if len(args) != 2:
                         Error.syntax(y, raw)
                         success = False
@@ -918,8 +920,8 @@ class Graph:
             # manually deleting makes for less memory usage
             del Manager.links
             del Manager.images
-            del Manager.points # points last because then they no longer have any references
-            Manager.points, Manager.links, Manager.images, self.scroll_x, self.scroll_y, self.zoom = backup
+            del Manager.nodes # nodes last because then they no longer have any references
+            Manager.nodes, Manager.links, Manager.images, self.scroll_x, self.scroll_y, self.zoom = backup
 
     def open_successful(self, save_file):
         """If opening a file was successful, prepare graph (reset variables)"""
@@ -946,42 +948,42 @@ class Graph:
                    '_S %f %f' %(self.scroll_x, self.scroll_y),
                    '_Z %f' %(self.zoom)]
 
-        # points
-        content += ('', '# POINTS')
-        for id, point in Manager.points.items():
-            content.append('P %f %f %d %d %d' %(point.x, point.y, point.rank, point.state, id))
+        # nodess
+        content += ('', '# NODES')
+        for id, node in Manager.nodes.items():
+            content.append('P %f %f %d %d %d' %(node.x, node.y, node.rank, node.state, id))
 
         # links
         content += ('', '# LINKS')
         for id, link in Manager.links.items():
-            content.append('L %d %d %d' %(link.p1.id, link.p2.id, id))
+            content.append('L %d %d %d' %(link.n1.id, link.n2.id, id))
 
         # images
         content += ('', '# IMAGES')
         for id, image in Manager.images.items():
             # check if this image is used in the graph, otherwise don't save it
             used = False
-            for point in Manager.points.values():
-                if point.image == image:
+            for node in Manager.nodes.values():
+                if node.image == image:
                     used = True
                     break
             
             if used:
                 content.append('I %s %d' %(image.path, image.id))
 
-        # images attached to points
+        # images attached to nodes
         content += ('', '# LINK IMAGES')
         used_image_ids = []
-        for id, point in Manager.points.items():
-            if point.image is not None:
-                content.append('Ai %d %d' %(id, point.image.id))
-                used_image_ids.append(point.image.id)
+        for id, node in Manager.nodes.items():
+            if node.image is not None:
+                content.append('Ai %d %d' %(id, node.image.id))
+                used_image_ids.append(node.image.id)
 
-        # text attached to points
+        # text attached to nodes
         content += ('', '# TEXT')
-        for id, point in Manager.points.items():
-            if point.text is not None:
-                content.append('At %d %s' %(id, point.text))
+        for id, node in Manager.nodes.items():
+            if node.text is not None:
+                content.append('At %d %s' %(id, node.text))
 
         # save into zip file
         with ZipFile(self.save_file, 'w') as z:
@@ -1015,7 +1017,7 @@ class Graph:
         Very large graphs might MemoryError, might have to export to another zoom. TODO?
         For now, it just raises an error."""
 
-        if not len(Manager.points):
+        if not len(Manager.nodes):
             ask_button('Cannot render an empty graph.', [(0, 'OK')])
             return
 
@@ -1031,13 +1033,13 @@ class Graph:
         # get the bounding boxes
         x0 = y0 = None
         x1 = y1 = None
-        for point in Manager.points.values():
+        for node in Manager.nodes.values():
             # yeah I know it's _ but I can't be bothered
-            offset = point._size/Graph.unit_size
-            if x0 is None or point.x < x0: x0 = point.x-offset
-            if y0 is None or point.y < y0: y0 = point.y-offset
-            if x1 is None or point.x > x1: x1 = point.x+offset
-            if y1 is None or point.y > y1: y1 = point.y+offset
+            offset = node._size/Graph.unit_size
+            if x0 is None or node.x < x0: x0 = node.x-offset
+            if y0 is None or node.y < y0: y0 = node.y-offset
+            if x1 is None or node.x > x1: x1 = node.x+offset
+            if y1 is None or node.y > y1: y1 = node.y+offset
         w, h = (x1-x0)*Graph.unit_size, (y1-y0)*Graph.unit_size
 
         try:
@@ -1054,8 +1056,8 @@ class Graph:
 
         for link in Manager.links.values():
             link.update([], surf, project)
-        for point in Manager.points.values():
-            point.update([], surf, project)
+        for node in Manager.nodes.values():
+            node.update([], surf, project)
 
         pygame.image.save(surf, file)
 
@@ -1088,19 +1090,19 @@ class Graph:
         mpos = pygame.mouse.get_pos()
 
         # get visible graph objects now, useful for collision checks
-        visible_p = [] # points objects that are visible
-        for point in Manager.points.values():
-            if point.visible():
-                visible_p.append(point)
+        visible_n = [] # node objects that are visible
+        for node in Manager.nodes.values():
+            if node.visible():
+                visible_n.append(node)
         visible_l = [] # same for links
         for link in Manager.links.values():
-            if link.p1 in visible_p or link.p2 in visible_p or link.p2 is None or True:
+            if link.n1 in visible_n or link.n2 in visible_n or link.n2 is None or True:
                 visible_l.append(link)
  
         self.hovered = None
-        for point in visible_p:
-            if point.collide(mpos):
-                self.hovered = point
+        for node in visible_n:
+            if node.collide(mpos):
+                self.hovered = node
                 break
         for link in visible_l:
             # don't select a link if something else has been selected,
@@ -1118,23 +1120,23 @@ class Graph:
 
                 if self.selection is None:
                     self.drag_start = (self.scroll_x, self.scroll_y)
-                elif type(self.selection) == Point:
+                elif type(self.selection) == Node:
                     self.drag_start = (self.selection.x, self.selection.y)
                 if type(self.selection) != Link:
                     self.drag_mouse_start = event.pos
 
                 # finish adding a link
-                if type(self.selection) == Point and self.link is not None and self.link.p1 != self.selection:
-                    # check if no link exists between these two points
+                if type(self.selection) == Node and self.link is not None and self.link.n1 != self.selection:
+                    # check if no link exists between these two nodes
                     ok = True
                     for link in Manager.links.values():
-                        if (link.p1 == self.link.p1 and link.p2 == self.selection) or \
-                            (link.p2 == self.link.p1 and link.p1 == self.selection):
+                        if (link.n1 == self.link.n1 and link.n2 == self.selection) or \
+                            (link.n2 == self.link.n1 and link.n1 == self.selection):
                             ok = False
                             break
 
                     if ok:
-                        self.link.p2 = self.selection
+                        self.link.n2 = self.selection
                         self.link.refresh()
                         self.link = None
                         self.select(None)
@@ -1175,7 +1177,7 @@ class Graph:
 
                 elif self.selection is None:
                     if event.key == K_p:
-                        Manager.new_point(*self.from_pos(*mpos), 0, 0)
+                        Manager.new_node(*self.from_pos(*mpos), 0, 0)
                         change = True
                     elif event.key == K_s:
                         if self.save_file is None: self.saveas()
@@ -1196,7 +1198,7 @@ class Graph:
                     elif event.key == K_f:
                         self.export(False)
 
-                elif type(self.selection) == Point:
+                elif type(self.selection) == Node:
                     if event.key == K_l and self.link is None:
                         self.link = Manager.new_link(self.selection.id, None)
                     elif event.key == K_i:
@@ -1206,7 +1208,7 @@ class Graph:
                             change = True
                     elif event.key == K_t:
                         check = lambda s: len(s) and '\n' not in s and '\r' not in s and '\t' not in s
-                        text = ask_input_box('Enter point text:', str, check, self.W-20)
+                        text = ask_input_box('Enter node text:', str, check, self.W-20)
                         if text is not None:
                             self.selection.set_text(text)
                             change = True
@@ -1222,11 +1224,11 @@ class Graph:
                         elif self.selection.text is not None:
                             self.selection.set_text(None)
                         else:
-                            to_delete = [] # links that connect to the deleted point
+                            to_delete = [] # links that connect to the deleted node
                             for id, link in Manager.links.items():
-                                if link.p1 == self.selection or link.p2 == self.selection:
+                                if link.n1 == self.selection or link.n2 == self.selection:
                                     to_delete.append(id)
-                            del Manager.points[self.selection.id]
+                            del Manager.nodes[self.selection.id]
                             for link in to_delete:
                                 del Manager.links[link]
                             self.selection = None
@@ -1246,7 +1248,7 @@ class Graph:
             m = 1/self.zoom/self.unit_size
             dx = (x0-x1) * m
             dy = (y0-y1) * m
-            if type(self.selection) == Point:
+            if type(self.selection) == Node:
                 self.selection.x = x - dx
                 self.selection.y = y - dy
             else:
@@ -1262,7 +1264,7 @@ class Graph:
 
         # update and render graph objects
         for link in visible_l: link.update(events, screen, self.get_pos)
-        for point in visible_p: point.update(events, screen, self.get_pos)
+        for node in visible_n: node.update(events, screen, self.get_pos)
 
         # update and render menu and UI
         self.ui.update()
@@ -1302,6 +1304,7 @@ def quit_app():
 
 FPS = 60
 pygame.init()
+pygame.key.set_repeat(400, 30)
 
 screen = pygame.display.set_mode((Graph.W, Graph.H))
 set_title(None)

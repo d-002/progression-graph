@@ -36,10 +36,10 @@ You can export the graphs you created with E (export without background) and F (
 
 ## Save files format
 - `P x y r s id`: creates a new point at coordinates (x, y), of rank r, states and with ID *id*
-- `L p1 p2 id`: creates a new link with ID *id*, attached to points of IDs *p1* and *p2*. These points should have been created before.
+- `L n1 n2 id`: creates a new link with ID *id*, attached to nodes of IDs *n1* and *n2*. These nodes should have been created before.
 - `I name id`: loads an image from the images in the zip file into image object with ID *id*
-- `Ai p i`: attaches the image of ID *i* to point of ID *p*
-- `At p text`: attaches text to the point of ID *p*
+- `Ai n i`: attaches the image of ID *i* to node of ID *n*
+- `At n text`: attaches text to the node of ID *n*
 - `# comment`: comment
 - `_S x y`: puts the camera at position (x, y) in the unit coordinate system
 - `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01

@@ -310,9 +310,10 @@ class Error:
         ask_button('Could not parse save file at line %d:\n"%s"\nAborting file loading' %(y+1, expression), [(0, 'OK')])
 
     @staticmethod
-    def corrupted_file(comment):
+    def corrupted_file(comment, success):
         """Used when a non-critical file parsing error has been found. This doesn't interrupt file loading."""
-        ask_button('Detected save file corruption:\n"%s"\nThe will will still be loaded, check for side-effects.' %comment, [(0, 'OK')])
+        load_text = 'The file will still be loaded, check for side-effects.' if success else ''
+        ask_button('Detected save file corruption:\n"%s"\n%s' %(comment, load_text), [(0, 'OK')])
 
     @staticmethod
     def zipfile(error):
@@ -867,7 +868,7 @@ class Graph:
                     try:
                         Manager.new_node(*args)
                     except:
-                        Error.corrupted_file('wrong node values: '+raw)
+                        Error.corrupted_file('wrong node values: '+raw, success)
                 case 'L': # add new link
                     if len(args) != 3:
                         Error.syntax(y, raw)
@@ -875,7 +876,7 @@ class Graph:
                     try:
                         Manager.new_link(*args)
                     except:
-                        Error.corrupted_file('wrong link values: '+raw)
+                        Error.corrupted_file('wrong link values: '+raw, success)
                 case 'I': # add new image
                     if len(args) != 2:
                         Error.syntax(y, raw)
@@ -885,7 +886,7 @@ class Graph:
                         content = other_files[name]
                         Manager.new_image(name, content, id)
                     except 1:
-                        Error.corrupted_file('wrong image values: '+raw)
+                        Error.corrupted_file('wrong image values: '+raw, success)
                         success = False
                 case 'Ai': # attach an image to a node
                     if len(args) != 2:
@@ -894,16 +895,16 @@ class Graph:
                     try:
                         Manager.attach_image(*args)
                     except:
-                        Error.corrupted_file('error while attaching image: '+raw)
+                        Error.corrupted_file('error while attaching image: '+raw, success)
                         success = False
                 case 'At': # attach text to a node
                     if len(args) != 2:
                         Error.syntax(y, raw)
                         success = False
                     try:
-                        Manager.attach_text(*args)
+                        Manager.attach_text(args[0], args[1].replace('\0', ' '))
                     except:
-                        Error.corrupted_file('error while attaching text: '+raw)
+                        Error.corrupted_file('error while attaching text: '+raw, success)
                         success = False
 
                 case '_S':
@@ -913,7 +914,7 @@ class Graph:
                     try:
                         self.scroll_x, self.scroll_y = float(args[0]), float(args[1])
                     except:
-                        Error.corrupted_file('invalid scroll position')
+                        Error.corrupted_file('invalid scroll position', success)
                 case '_Z':
                     if len(args) != 1:
                         Error.syntax(y, raw)
@@ -921,7 +922,7 @@ class Graph:
                     try:
                         self.zoom = float(args[0])
                     except:
-                        Error.corrupted_file('invalid zoom value')
+                        Error.corrupted_file('invalid zoom value', success)
                     if self.zoom < Graph.min_z: # forbidden values: reset zoom
                         self.zoom = Graph.min_z
                 case _:
@@ -1001,7 +1002,7 @@ class Graph:
         content += ('', '# TEXT')
         for id, node in Manager.nodes.items():
             if node.text is not None:
-                content.append('At %d %s' %(id, node.text))
+                content.append('At %d %s' %(id, node.text.replace(' ', '\0')))
 
         # save into zip file
         with ZipFile(self.save_file, 'w') as z:

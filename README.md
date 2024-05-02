@@ -21,16 +21,15 @@ Progression graph tool for games
 ## Controls
 Click on an object to select it, hit Escape to unselect it. Escape can also be used to cancel creating a link.
 
-Create a link with L when a node is selected, click another node to connect the two nodes.
+When a node is selected, press S to cycle its state, R to cycle its rank, or create a link with L and click another node to connect them.
 
 Options will appear on top of the screen dependoing on the selection. Hit the corresponding keys to execute the different actions.
 
-When no object is selected, you can zoom in and out with the mouse wheel, and reset the zoom with z.
+When no object is selected, you can zoom in and out with the mouse wheel, and reset the zoom with Z.  
+S saves the current file, W saves to a new file, N opens a new file, O opens a file.
 
 Pressing Delete will detach the image from a point, or remove its text, or delete the point if there is nothing in it.  
 You can also remove the text or the image from a point by adding an empty text or hitting Cancel in the input popup.
-
-S saves the current file, W saves to a new file, N opens a new file, O opens a file.
 
 You can export the graphs you created with E (export without background) and F (filled background), and quit with Q or the regular window means.
 

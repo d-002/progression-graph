@@ -46,12 +46,15 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
                   font.render('  Error: invalid value', True, Palette.red)]
     error_pos = (Graph.W/2 - error_text[0].get_width()/2, Graph.H*0.3 + 20)
 
+    button = Button('Cancel', Graph.W/2, Graph.H*2/3)
+
     # loop until the user presses Enter
     string = ''
     run = True
     while run:
         enter = False # for when to try to get out of the loop
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == QUIT:
                 pygame.event.post(pygame.event.Event(QUIT))
                 return
@@ -89,6 +92,9 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
         y = Graph.H/2 - 8
         pygame.draw.rect(screen, Palette.neutral, Rect((x-4, y-4), (w+8, 24)))
         screen.blit(text, (x, y))
+
+        # update button
+        if button.update(events): return
 
         pygame.display.flip()
         clock.tick(FPS)
@@ -700,7 +706,7 @@ class UI:
                   'N: new file, O: open file, P: new node, I: import image, Z: reset zoom, E: export graph to image,', 'F: export with background, Q: quit'),
                  'Del: delete link']
         # edit texts to discriminate between deleting a node, its image or its text
-        text = 'L: start link, I: add image, T: add text, Del: delete %s, R: cycle rank, C: cycle state'
+        text = 'L: start link, I: add image, T: add text, Del: delete %s, R: cycle rank, S: cycle state'
         texts.append(text %'node')
         texts.append(text %"text")
         texts.append(text %"image")
@@ -1215,7 +1221,7 @@ class Graph:
                     elif event.key == K_r:
                         self.selection.cycle_rank()
                         change = True
-                    elif event.key == K_c:
+                    elif event.key == K_s:
                         self.selection.cycle_state()
                         change = True
                     elif event.key == K_DELETE:

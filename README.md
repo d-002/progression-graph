@@ -45,6 +45,13 @@ You can export the graphs you created with E (export without background) and F (
 
 ## TODO
 - Zip file faster load/save: use diff
-- Change images and sizes on zoom
+- Change images and sizes on zoom (not text?)
 - Unselect when exporting
-- UI auto word wrap, min size 640\*480?
+- UI auto word wrap, min size 640\*480, more details
+- Lower FPS if not active window
+- Zoom indicator (bar)
+- Add button in text input
+- Display full points text on export
+- Select node when adding it
+- Pre-fill name when exporting
+- Add bigger margin depending on the text size

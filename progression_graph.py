@@ -410,7 +410,7 @@ class Manager:
     @staticmethod
     def attach_image(node_id, image_id):
         """Sets the image reference of a node"""
-        Manager.node[int(node_id)].set_image(Manager.images[int(image_id)])
+        Manager.nodes[int(node_id)].set_image(Manager.images[int(image_id)])
 
     @staticmethod
     def attach_text(node_id, text):
@@ -419,7 +419,7 @@ class Manager:
 
     @staticmethod
     def reset():
-        Manager.node = {}
+        Manager.nodes = {}
         Manager.links = {}
         Manager.images = {}
 
@@ -885,7 +885,7 @@ class Graph:
                         name, id = args
                         content = other_files[name]
                         Manager.new_image(name, content, id)
-                    except 1:
+                    except:
                         Error.corrupted_file('wrong image values: '+raw, success)
                         success = False
                 case 'Ai': # attach an image to a node

@@ -65,6 +65,8 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
                     enter = True
                 else:
                     string += event.unicode
+            elif event.type == VIDEORESIZE:
+                graph.resize()
 
         # add blinking cursor for displayed text
         blink = ticks()%1000 < 600
@@ -131,6 +133,8 @@ def ask_button(message, buttons):
             elif event.type == KEYDOWN and event.key == K_ESCAPE:
                 run = False
                 res = None
+            elif event.type == VIDEORESIZE:
+                graph.resize()
 
         screen.blit(background, (0, 0))
 
@@ -210,6 +214,8 @@ def image_selector():
             elif event.type == KEYDOWN and event.key == K_ESCAPE:
                 run = False
                 res = None
+            elif event.type == VIDEORESIZE:
+                graph.resize()
 
         screen.fill(Palette.background)
 
@@ -783,6 +789,12 @@ class Graph:
 
         self.changes = False # set to True when changed something (will trigger a popup on close)
 
+    def resize(self):
+        """Triggered when a pygame.VIDEORESIZE event is detected. Updates Graph.W, Graph.H and ui"""
+        Graph.W, Graph.H = screen.get_size()
+        if 'ui' in dir(self):
+            self.ui.update_surf()
+
     def debug(self, *args):
         """Adds debug information to be displayed in self.update, deprecated unless in development.
         *args: many arguments that will be added to the debug string with space separators.
@@ -1312,7 +1324,7 @@ FPS = 60
 pygame.init()
 pygame.key.set_repeat(400, 30)
 
-screen = pygame.display.set_mode((Graph.W, Graph.H))
+screen = pygame.display.set_mode((Graph.W, Graph.H), RESIZABLE)
 set_title(None)
 font = pygame.font.SysFont('consolas', 16)
 font2 = pygame.font.SysFont('consolas', 12)
@@ -1333,6 +1345,8 @@ while run:
     for event in events:
         if event.type == QUIT:
             quit_app()
+        elif event.type == VIDEORESIZE:
+            graph.resize()
 
     graph.update(events)
     pygame.display.flip()

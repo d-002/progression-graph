@@ -47,4 +47,4 @@ You can export the graphs you created with E (export without background) and F (
 - Zip file faster load/save: use diff
 - Change images and sizes on zoom
 - Unselect when exporting
-- Resize window, UI auto word wrap, min size 640\*480?
+- UI auto word wrap, min size 640\*480?

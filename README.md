@@ -44,14 +44,18 @@ You can export the graphs you created with E (export without background) and F (
 - `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01
 
 ## TODO
-- Zip file faster load/save: use diff
-- Change images and sizes on zoom (not text?)
-- Unselect when exporting
-- UI auto word wrap, min size 640\*480, more details
-- Lower FPS if not active window
-- Zoom indicator (bar)
+- Deselect point when starting a link
 - Add button in text input
 - Display full points text on export
 - Select node when adding it
 - Pre-fill name when exporting
+- UI auto word wrap, min size 640\*480, more details
+- Unselect when exporting
+- Fix adding images multiple times in zip
 - Add bigger margin depending on the text size
+- Lower FPS if not active window
+- Zoom indicator (bar)
+- Show two lines of text when not selected?
+- Zoom around mouse
+- Change images and sizes on zoom (not text?)
+- Zip file faster load/save: use diff?

@@ -1,4 +1,3 @@
-import os
 import pygame
 from zipfile import ZipFile
 from math import sqrt
@@ -549,7 +548,7 @@ class Node(GraphObject):
         self._surfs = [None]*3
 
         # draw empty box
-        m = int(self._size/10) # outline margin
+        m = int(s/10) # outline margin
         if m > 5: m = 5
 
         for i in range(3): # set normal, hovered, and selected surfaces
@@ -945,7 +944,7 @@ class Graph:
     def open_successful(self, save_file):
         """If opening a file was successful, prepare graph (reset variables)"""
         self.save_file = save_file
-        
+
         # reset variables
         self.drag_start = None
         self.drag_mouse_start = None
@@ -986,7 +985,7 @@ class Graph:
                 if node.image == image:
                     used = True
                     break
-            
+
             if used:
                 content.append('I %s %d' %(image.path, image.id))
 
@@ -1010,7 +1009,7 @@ class Graph:
             z.writestr('save.txt', '\n'.join(content)+'\n')
 
             # encode the width, height and image data into image files
-            for id in used_image_ids:
+            for id in set(used_image_ids):
                 image = Manager.images[id]
                 w, h = image.surf.get_size()
                 content = b'%d.%d.%s' %(w, h, pygame.image.tostring(image.surf, 'RGBA'))
@@ -1050,15 +1049,14 @@ class Graph:
         pygame.display.flip()
 
         # get the bounding boxes
-        x0 = y0 = None
-        x1 = y1 = None
+        x0 = y0 = x1 = y1 = None
         for node in Manager.nodes.values():
-            # yeah I know it's _ but I can't be bothered
+            # yeah I know it's supposed to be private _ but I can't be bothered renaming it
             offset = node._size/Graph.unit_size
-            if x0 is None or node.x < x0: x0 = node.x-offset
-            if y0 is None or node.y < y0: y0 = node.y-offset
-            if x1 is None or node.x > x1: x1 = node.x+offset
-            if y1 is None or node.y > y1: y1 = node.y+offset
+            if x0 is None or node.x-offset < x0: x0 = node.x-offset
+            if y0 is None or node.y-offset < y0: y0 = node.y-offset
+            if x1 is None or node.x+offset > x1: x1 = node.x+offset
+            if y1 is None or node.y+offset > y1: y1 = node.y+offset
         w, h = (x1-x0)*Graph.unit_size, (y1-y0)*Graph.unit_size
 
         try:
@@ -1117,7 +1115,7 @@ class Graph:
         for link in Manager.links.values():
             if link.n1 in visible_n or link.n2 in visible_n or link.n2 is None or True:
                 visible_l.append(link)
- 
+
         self.hovered = None
         for node in visible_n:
             if node.collide(mpos):
@@ -1169,8 +1167,8 @@ class Graph:
 
             # zoom
             elif event.type == MOUSEWHEEL and not pressed:
-                if event.y > 0: self.zoom *= 1.2 # zoom inif not changes or want_to_save() is not None:
-                            
+                if event.y > 0: self.zoom *= 1.2 # zoom in
+
                 elif self.zoom > Graph.min_z: self.zoom /= 1.2 # zoom out
                 else: self.zoom = Graph.min_z # min zoom
                 change = True

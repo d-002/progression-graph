@@ -169,11 +169,12 @@ def ask_filename(new=False):
         file = asksaveasfilename(title='Save to file', filetypes=filetype)
 
         # make sure the file has the right extension
-        if file == '': return file
-        if not file.endswith('.graph'): file += '.graph'
-        return file
+        if file and not file.endswith('.graph'): file += '.graph'
 
-    return askopenfilename(title='Open save file', filetypes=filetype)
+    else: file = askopenfilename(title='Open save file', filetypes=filetype)
+
+    pygame.event.get() # don't trigger this infinitely
+    return file
 
 def image_selector():
     """Graphical image selector, displays all loaded images into a grid for the user to select"""
@@ -1083,9 +1084,6 @@ class Graph:
         # reset the screen to as it was before for safety
         screen.blit(old_screen, (0, 0))
         pygame.display.flip()
-
-        # get pygame events, also for safety
-        pygame.event.get()
 
     def get_pos(self, x, y):
         """Returns the position, in screen coordinates, corresponding to a position in graph coordinates"""

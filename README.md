@@ -44,7 +44,6 @@ You can export the graphs you created with E (export without background) and F (
 - `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01
 
 ## TODO
-- Fix bug infinite Open + remove get()
 - Add button in text input
 - Select node when adding it
 - Pre-fill name when exporting

@@ -44,8 +44,6 @@ You can export the graphs you created with E (export without background) and F (
 - `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01
 
 ## TODO
-- Back to (0, 0) key
-- UI auto word wrap, min size 640\*480, more details
 - Lower FPS if not active window
 - Zoom indicator (bar)
 - Zoom around mouse

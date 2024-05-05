@@ -712,28 +712,43 @@ class UI:
 
     def __init__(self):
         self.surf = None # blitted, cached surface
-        texts = [('Click: select elements, drag with mouse: move/scroll, scroll: zoom, S: save file, W: save as file,',
-                  'N: new file, O: open file, P: new node, I: import image, Z: reset zoom, E: export graph to image,', 'F: export with background, Q: quit'),
+        self.raw_texts = [('Left click: select elements, drag with mouse: move object/camera, mouse scroll: zoom in/out, S: save file, W: save as file, N: new file, O: open file, P: new node, I: import image to the images bank, E: export graph to image (no background), F: export with background'),
                  'Del: delete link']
         # edit texts to discriminate between deleting a node, its image or its text
-        text = 'L: start link, I: add image, T: add text, Del: delete %s, R: cycle rank, S: cycle state'
-        texts.append(text %'node')
-        texts.append(text %"text")
-        texts.append(text %"image")
+        text = 'L: start link, I: attach image from the bank, T: add text, R: cycle rank, S: cycle state, Del: delete %s'
+        self.raw_texts.append(text %'node')
+        self.raw_texts.append(text %"the node's text")
+        self.raw_texts.append(text %"the node's image")
+        for i in range(len(self.raw_texts)):
+            self.raw_texts[i] += ', Z: reset zoom, A: reset camera pos+zoom, Q: quit'
 
-        # transform the texts into text surfaces
-        self.text = [None]*len(texts)
-        for i, text in enumerate(texts):
-            # text can have multiple lines, treat all texts the same way
-            if type(text) == str:
-                text = (text,)
+        self.process_raw_texts()
+
+    def process_raw_texts(self):
+        """Makes text surfaces out of self.raw_texts"""
+
+        self.text = [None]*len(self.raw_texts)
+        for i, text in enumerate(self.raw_texts):
+            # word wrap
+            lines = ['']
+            j = 0
+            for word in text.split(' '):
+                space = ' ' if lines[j] else ''
+                if len(lines[j]+space+word) * char_w > Graph.W - 24:
+                    if lines[j] == '':
+                        lines[j] += word
+                        lines.append('')
+                    else: lines.append(word)
+                    j += 1
+                else:
+                    lines[j] += space+word
 
             # add all lines of a text into one surface
-            h = len(text)*16
+            h = len(lines)*16
             y = 0
             surf = pygame.Surface((Graph.W, h), SRCALPHA)
 
-            for line in text:
+            for line in lines:
                 surf.blit(font.render(line, True, Palette.text), (0, y))
                 y += 16
             self.text[i] = surf
@@ -742,7 +757,7 @@ class UI:
 
     def update_surf(self, init=False):
         """Updates cached Surface: redraws background, adds elements depending on selection.
-        If init is True (should be set to True only on init), graph is assumed to not exist."""
+        If init is True (should be set to True only on init), graph is assumed to not exist (same as when graph.selection is None)."""
 
         if init or graph.selection is None:
             text = self.text[0]
@@ -795,9 +810,26 @@ class Graph:
 
     def resize(self):
         """Triggered when a pygame.VIDEORESIZE event is detected. Updates Graph.W, Graph.H and ui"""
+
+        global screen
+
         Graph.W, Graph.H = screen.get_size()
+        change = False
+        if Graph.W < 640:
+            Graph.W = 640
+            change = True
+        if Graph.H < 480:
+            Graph.H = 480
+            change = True
+
+        if change: # minimum window size
+            surf = pygame.Surface(screen.get_size())
+            surf.blit(screen, (0, 0))
+            screen = pygame.display.set_mode((Graph.W, Graph.H), RESIZABLE)
+            screen.blit(surf, (0, 0))
+
         if 'ui' in dir(self):
-            self.ui.update_surf()
+            self.ui.process_raw_texts()
 
     def debug(self, *args):
         """Adds debug information to be displayed in self.update, deprecated unless in development.
@@ -1184,6 +1216,9 @@ class Graph:
             # keys
             elif event.type == KEYDOWN:
                 if event.key == K_z: self.zoom = 1
+                elif event.key == K_a:
+                    self.zoom = 1
+                    self.scroll_x = self.scroll_y = 0
                 elif event.key == K_q:
                     if quit_app():
                         return

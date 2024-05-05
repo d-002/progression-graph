@@ -4,6 +4,14 @@ from math import sqrt
 from os.path import exists, splitext, basename
 from pygame.locals import *
 
+# lower fps if window inactive, but needs win32 utils to do that
+from sys import platform
+if 'win' in platform:
+    import win32gui
+else:
+    class win32gui:
+        def GetForegroundWindow(*args): return True
+
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 
 def get_popup_bg(message):
@@ -712,8 +720,9 @@ class UI:
 
     def __init__(self):
         self.surf = None # blitted, cached surface
+        self.H = 0
         self.raw_texts = [('Left click: select elements, drag with mouse: move object/camera, mouse scroll: zoom in/out, S: save file, W: save as file, N: new file, O: open file, P: new node, I: import image to the images bank, E: export graph to image (no background), F: export with background'),
-                 'Del: delete link']
+                          'Del: delete link']
         # edit texts to discriminate between deleting a node, its image or its text
         text = 'L: start link, I: attach image from the bank, T: add text, R: cycle rank, S: cycle state, Del: delete %s'
         self.raw_texts.append(text %'node')
@@ -772,8 +781,10 @@ class UI:
         pygame.draw.rect(self.surf, Palette.neutral, Rect((0, 0), (Graph.W, h)))
         self.surf.blit(text, (12, 12))
 
+        self.H = self.surf.get_height()
+
     def update(self):
-        self.surf.set_alpha(100 if pygame.mouse.get_pos()[1] < 40 else 255)
+        self.surf.set_alpha(100 if pygame.mouse.get_pos()[1] < self.H and pygame.mouse.get_focused() else 255)
         screen.blit(self.surf, (0, 0))
 
 class Graph:
@@ -1363,11 +1374,12 @@ def quit_app():
     run = False
     return True
 
-FPS = 60
+_FPS = 60 # actually used FPS will be based on this value
 pygame.init()
 pygame.key.set_repeat(400, 30)
 
 screen = pygame.display.set_mode((Graph.W, Graph.H), RESIZABLE)
+hwnd = pygame.display.get_wm_info()['window']
 set_title(None)
 font = pygame.font.SysFont('consolas', 16)
 font2 = pygame.font.SysFont('consolas', 12)
@@ -1383,6 +1395,9 @@ graph = Graph()
 dt = 0 # time passed in last frame, in seconds
 run = True
 while run:
+    active = hwnd == win32gui.GetForegroundWindow() and pygame.mouse.get_focused()
+    FPS = _FPS if active else _FPS/10
+
     # handle pygame event loop
     events = pygame.event.get()
     for event in events:

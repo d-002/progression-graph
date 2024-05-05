@@ -45,7 +45,8 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
                   font.render('  Error: invalid value', True, Palette.red)]
     error_pos = (Graph.W/2 - error_text[0].get_width()/2, Graph.H*0.3 + 20)
 
-    button = Button('Cancel', Graph.W/2, Graph.H*2/3)
+    button1 = Button('Add', Graph.W/2 - 120, Graph.H*2/3)
+    button2 = Button('Cancel', Graph.W/2 + 120, Graph.H*2/3)
 
     # loop until the user presses Enter
     string = ''
@@ -94,8 +95,9 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
         pygame.draw.rect(screen, Palette.neutral, Rect((x-4, y-4), (w+8, 24)))
         screen.blit(text, (x, y))
 
-        # update button
-        if button.update(events): return
+        # update buttons
+        if button1.update(events) and not error: run = False
+        if button2.update(events): return
 
         pygame.display.flip()
         clock.tick(FPS)
@@ -1194,7 +1196,7 @@ class Graph:
 
                 elif self.selection is None:
                     if event.key == K_p:
-                        Manager.new_node(*self.from_pos(*mpos), 0, 0)
+                        self.select(Manager.new_node(*self.from_pos(*mpos), 0, 0))
                         change = True
                     elif event.key == K_s:
                         if self.save_file is None: self.saveas()
@@ -1266,13 +1268,13 @@ class Graph:
             m = 1/self.zoom/self.unit_size
             dx = (x0-x1) * m
             dy = (y0-y1) * m
-            if type(self.selection) == Node:
-                self.selection.x = x - dx
-                self.selection.y = y - dy
-            else:
+            if self.selection is None:
                 self.scroll_x = x + dx
                 self.scroll_y = y + dy
-            change = bool(dx or dy)
+            else:
+                self.selection.x = x - dx
+                self.selection.y = y - dy
+                change = bool(dx or dy)
 
         if change:
             self.changes = True

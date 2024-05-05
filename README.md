@@ -44,13 +44,9 @@ You can export the graphs you created with E (export without background) and F (
 - `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01
 
 ## TODO
-- Better export margin handling (x, update y)
-- Pre-fill name when exporting
+- Back to (0, 0) key
 - UI auto word wrap, min size 640\*480, more details
-- Unselect when exporting
-- Add bigger margin depending on the text size
 - Lower FPS if not active window
 - Zoom indicator (bar)
-- Show two lines of text when not selected?
 - Zoom around mouse
 - Change images and sizes on zoom (not text?)

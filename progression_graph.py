@@ -1043,9 +1043,13 @@ class Graph:
             ask_button('Cannot render an empty graph.', [(0, 'OK')])
             return
 
-        file = asksaveasfilename(title='Export to file', filetypes=(('PNG files', '.png'),))
+        if self.save_file is None: file = None
+        else: file = splitext(basename(self.save_file))[0]+'.png'
+        file = asksaveasfilename(title='Export to file', filetypes=(('PNG files', '.png'),), initialfile=file)
+        pygame.event.get()
         if not file: return
         if not file.endswith('.png'): file += '.png'
+        self.select(None)
 
         # display a loading screen
         old_screen, background = get_popup_bg('Loading... Please wait.')
@@ -1056,16 +1060,18 @@ class Graph:
         x0 = y0 = x1 = y1 = None
         for node in Manager.nodes.values():
             # yeah I know it's supposed to be private _ but I can't be bothered renaming it
-            offset = node._size/Graph.unit_size
-            offset2 = offset+5+node._text_surfs[1].get_height()
-            if x0 is None or node.x-offset < x0: x0 = node.x-offset
-            if y0 is None or node.y-offset < y0: y0 = node.y-offset
-            if x1 is None or node.x+offset > x1: x1 = node.x+offset
-            if y1 is None or node.y+offset > y1: y1 = node.y+offset
+            w, h = node._text_surfs[1].get_size()
+            offsettop = node._size/2/Graph.unit_size
+            offsetx = max(offsettop, w/2/Graph.unit_size)
+            offsetbtm = offsettop + (5+h)/Graph.unit_size
+            if x0 is None or node.x-offsetx < x0: x0 = node.x-offsetx
+            if y0 is None or node.y-offsettop < y0: y0 = node.y-offsettop
+            if x1 is None or node.x+offsetx > x1: x1 = node.x+offsetx
+            if y1 is None or node.y+offsetbtm > y1: y1 = node.y+offsetbtm
         w, h = (x1-x0)*Graph.unit_size, (y1-y0)*Graph.unit_size
 
         try:
-            surf = pygame.Surface((w+40, h+40), SRCALPHA)
+            surf = pygame.Surface((w+80, h+80), SRCALPHA)
         except MemoryError:
             ask_button('A MemoryError occured.\nMaybe try to lower the size of your graph.', [(0, 'OK')])
             return
@@ -1074,7 +1080,7 @@ class Graph:
             surf.fill(Palette.background)
 
         # add all objects: make a custom projector for this surface
-        project = lambda x, y: ((x-x0)*Graph.unit_size + 20, (y-y0)*Graph.unit_size + 20)
+        project = lambda x, y: ((x-x0)*Graph.unit_size + 40, (y-y0)*Graph.unit_size + 40)
 
         for link in Manager.links.values():
             link.update([], surf, project)

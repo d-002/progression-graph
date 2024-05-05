@@ -580,8 +580,9 @@ class Node(GraphObject):
         s = self._size/2
         return -s <= x < Graph.W+s and -s <= y < Graph.H+s
 
-    def update(self, events, surf, project):
-        """Called by grah update() each frame. Blits a surface onto surf at the position given by the projector."""
+    def update(self, events, surf, project, force_text=False):
+        """Called by grah update() each frame. Blits a surface onto surf at the position given by the projector.
+        The text is cut when not hovered/selected, but this can be overriden by setting force_text to True"""
         x, y = project(self.x, self.y)
 
         # use a different texture when hovered
@@ -590,7 +591,7 @@ class Node(GraphObject):
 
         # draw text
         if self._text_surfs is not None:
-            t = self._text_surfs[bool(i)]
+            t = self._text_surfs[force_text or bool(i)]
             surf.blit(t, (x - t.get_width()/2, y + self._size/2 + 5))
 
 class Link(GraphObject):
@@ -1053,6 +1054,7 @@ class Graph:
         for node in Manager.nodes.values():
             # yeah I know it's supposed to be private _ but I can't be bothered renaming it
             offset = node._size/Graph.unit_size
+            offset2 = offset+5+node._text_surfs[1].get_height()
             if x0 is None or node.x-offset < x0: x0 = node.x-offset
             if y0 is None or node.y-offset < y0: y0 = node.y-offset
             if x1 is None or node.x+offset > x1: x1 = node.x+offset
@@ -1074,7 +1076,7 @@ class Graph:
         for link in Manager.links.values():
             link.update([], surf, project)
         for node in Manager.nodes.values():
-            node.update([], surf, project)
+            node.update([], surf, project, True)
 
         pygame.image.save(surf, file)
 
@@ -1218,6 +1220,7 @@ class Graph:
                 elif type(self.selection) == Node:
                     if event.key == K_l and self.link is None:
                         self.link = Manager.new_link(self.selection.id, None)
+                        self.select(None)
                     elif event.key == K_i:
                         image = image_selector()
                         if image is not None:

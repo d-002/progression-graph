@@ -1,6 +1,6 @@
 import pygame
 from zipfile import ZipFile
-from math import sqrt
+from math import sqrt, floor, log
 from os.path import exists, splitext, basename
 from pygame.locals import *
 
@@ -336,6 +336,7 @@ class Palette:
     background = (40, 40, 43)
     neutral = (80, 80, 85)
     red = (255, 0, 0)
+    zoom_bar = ((200, 200, 200), (170, 170, 170))
 
     # States base colors. Nodes and links colors are derived from them
     _states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
@@ -720,7 +721,8 @@ class UI:
 
     def __init__(self):
         self.surf = None # blitted, cached surface
-        self.H = 0
+        self.zoom_surf = None
+
         self.raw_texts = [('Left click: select elements, drag with mouse: move object/camera, mouse scroll: zoom in/out, S: save file, W: save as file, N: new file, O: open file, P: new node, I: import image to the images bank, E: export graph to image (no background), F: export with background'),
                           'Del: delete link']
         # edit texts to discriminate between deleting a node, its image or its text
@@ -732,6 +734,9 @@ class UI:
             self.raw_texts[i] += ', Z: reset zoom, A: reset camera pos+zoom, Q: quit'
 
         self.process_raw_texts()
+
+        # zoom indicator
+        self.last_zoom = 0
 
     def process_raw_texts(self):
         """Makes text surfaces out of self.raw_texts"""
@@ -781,11 +786,40 @@ class UI:
         pygame.draw.rect(self.surf, Palette.neutral, Rect((0, 0), (Graph.W, h)))
         self.surf.blit(text, (12, 12))
 
-        self.H = self.surf.get_height()
+    def refresh_zoom(self):
+        """Refreshes the cached self.zoom_surf according to the current graph zoom"""
+        step = 10**floor(log(1/graph.zoom, 10))
+        w = int(step*graph.zoom*Graph.unit_size)
 
-    def update(self):
-        self.surf.set_alpha(100 if pygame.mouse.get_pos()[1] < self.H and pygame.mouse.get_focused() else 255)
+        # prepre text for the surface
+        text = font2.render(str(step), True, Palette.text)
+        w_ = text.get_width()
+
+        self.zoom_surf = pygame.Surface((w_ + 5 + w*4, 12), SRCALPHA)
+        for i in range(4):
+            col = Palette.zoom_bar[i&1]
+            pygame.draw.rect(self.zoom_surf, col, Rect(w_ + 5 + i*w, 2, w, 8))
+        self.zoom_surf.blit(text, (0, 0))
+
+    def update(self, zoom):
+        """Displays the cached surface to the screen, updates zoom indicator.
+        Param zoom: boolean, True if changed zoom this frame"""
+
+        height = self.surf.get_height()
+        self.surf.set_alpha(100 if pygame.mouse.get_pos()[1] < height and pygame.mouse.get_focused() else 255)
         screen.blit(self.surf, (0, 0))
+
+        if zoom: self.last_zoom = ticks()
+        dt = ticks()-self.last_zoom
+
+        if dt < 3000:
+            # recalculate the cached surface
+            if zoom or self.zoom_surf is None:
+                self.refresh_zoom()
+
+            w = self.zoom_surf.get_width()
+            self.zoom_surf.set_alpha(255 if dt < 2000 else (3000-dt)*0.255)
+            screen.blit(self.zoom_surf, (Graph.W-w-10, height+12))
 
 class Graph:
     """Graph manager, for displaying the graph, handling scroll, and updating elements"""
@@ -793,7 +827,6 @@ class Graph:
     H = 500
 
     unit_size = 100 # graph unit to pixel ratio
-    min_z = 0.01
 
     def __init__(self):
         assert Palette.init
@@ -969,8 +1002,8 @@ class Graph:
                         self.zoom = float(args[0])
                     except:
                         Error.corrupted_file('invalid zoom value', success)
-                    if self.zoom < Graph.min_z: # forbidden values: reset zoom
-                        self.zoom = Graph.min_z
+                    if not self.zoom: # forbidden value: reset zoom
+                        self.zoom = 1
                 case _:
                     Error.syntax(y, raw)
                     success = False
@@ -1179,6 +1212,7 @@ class Graph:
             if link.collide(mpos): self.hovered = link
 
         change = False # did the user do a change this frame?
+        change_zoom = False # did the zoom change this frame?
 
         # events check
         for event in events:
@@ -1219,16 +1253,18 @@ class Graph:
             # zoom
             elif event.type == MOUSEWHEEL and not pressed:
                 if event.y > 0: self.zoom *= 1.2 # zoom in
+                else: self.zoom /= 1.2 # zoom out
 
-                elif self.zoom > Graph.min_z: self.zoom /= 1.2 # zoom out
-                else: self.zoom = Graph.min_z # min zoom
-                change = True
+                change_zoom = True
 
             # keys
             elif event.type == KEYDOWN:
-                if event.key == K_z: self.zoom = 1
+                if event.key == K_z:
+                    self.zoom = 1
+                    self.ui.refresh_zoom()
                 elif event.key == K_a:
                     self.zoom = 1
+                    self.ui.refresh_zoom()
                     self.scroll_x = self.scroll_y = 0
                 elif event.key == K_q:
                     if quit_app():
@@ -1339,7 +1375,7 @@ class Graph:
         for node in visible_n: node.update(events, screen, self.get_pos)
 
         # update and render menu and UI
-        self.ui.update()
+        self.ui.update(change_zoom)
 
         # display debug screen if needed
         if self._debug_surf is not None:

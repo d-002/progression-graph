@@ -269,26 +269,26 @@ class Button:
         """Creates a button at pos (x, y) on the screen (top center),
         with width of at least min_w pixels"""
 
-        self._x = x
-        self._y = y
+        self.x = x
+        self.y = y
 
         # create the base text surface and pad it,
         # also add space on the sides if needed to get to min_w width
         text = font.render(text, True, Palette.text)
         wt, ht = text.get_size()
         w = min_w if wt < min_w else wt
-        self._w, self._h = w+10, ht+10
+        self.w, self.h = w+10, ht+10
 
-        tsurf = pygame.Surface((self._w, self._h), SRCALPHA)
-        tsurf.blit(text, (self._w/2 - wt/2 + 5, 5))
+        tsurf = pygame.Surface((self.w, self.h), SRCALPHA)
+        tsurf.blit(text, (self.w/2 - wt/2 + 5, 5))
 
         # make textures depending on the button state: normal, hovered, selected
-        self._surfs = [None]*3
+        self.surfs = [None]*3
         for i, mult in enumerate((1, 1.2, 1.5)):
-            surf = pygame.Surface((self._w, self._h), SRCALPHA)
+            surf = pygame.Surface((self.w, self.h), SRCALPHA)
             surf.fill(Palette.mult(Palette.neutral, mult))
             surf.blit(tsurf, (0, 0))
-            self._surfs[i] = surf
+            self.surfs[i] = surf
 
     def update(self, events):
         """Returns True if the button is clicked, False otherwise.
@@ -296,8 +296,8 @@ class Button:
 
         mx, my = pygame.mouse.get_pos()
         click = pygame.mouse.get_pressed()[0]
-        hovered = self._x - self._w/2 <= mx <= self._x + self._w/2 and \
-                  self._y <= my <= self._y + self._h
+        hovered = self.x - self.w/2 <= mx <= self.x + self.w/2 and \
+                  self.y <= my <= self.y + self.h
 
         res = False
         for event in events:
@@ -307,7 +307,7 @@ class Button:
                     break
 
         # display the button
-        screen.blit(self._surfs[(click+1) * hovered], (self._x - self._w/2, self._y))
+        screen.blit(self.surfs[(click+1) * hovered], (self.x - self.w/2, self.y))
 
         return res
 
@@ -339,7 +339,7 @@ class Palette:
     zoom_bar = ((200, 200, 200), (170, 170, 170))
 
     # States base colors. Nodes and links colors are derived from them
-    _states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
+    states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
 
     link = [None]*3 # contains a nested list: [[todo normal, todo hovered, todo selected], [doing], [completed]]
     # same for box colors
@@ -353,7 +353,7 @@ class Palette:
     def __init__():
         Palette.init = True
 
-        for i, col in enumerate(Palette._states):
+        for i, col in enumerate(Palette.states):
             # init link colors
             Palette.link[i] = (col, Palette.mult(col, 0.6, 127), Palette.mult(col, 0.3, 192))
 
@@ -456,11 +456,11 @@ class Node(GraphObject):
         self.text = None # text, None for no text
         self.image = None # image, None for no image
 
-        self._surf = None # should always contain the surface with the right size
+        self.surf = None # should always contain the surface with the right size
         # rendered pygame fonts, None for no text
         # if text, will contain [shortened text, full text (on hover/selection)]
-        self._text_surfs = None
-        self._size = None # should contain the size according to self.rank
+        self.text_surfs = None
+        self.size = None # should contain the size according to self.rank
 
         self.set_rank(rank) # init self.rank, self.size and self.surfs
 
@@ -472,7 +472,7 @@ class Node(GraphObject):
 
     def set_rank(self, rank):
         self.rank = rank
-        self._size = Node.get_rank_size(rank)
+        self.size = Node.get_rank_size(rank)
         self.set_image(self.image)
 
         # update attached links
@@ -509,13 +509,13 @@ class Node(GraphObject):
         """Sets the node's text and updates its text Surface"""
         self.text = text
         if text is None:
-            self._text_surfs = None
+            self.text_surfs = None
         else:
             max_width = 100
             if len(text)*char_w2 > max_width:
                 # make unselected surface: cut text
                 surf = font2.render(text[:int(max_width/char_w2)-3]+'...', True, Palette.text)
-                self._text_surfs = [Node.black_back(surf), None]
+                self.text_surfs = [Node.black_back(surf), None]
 
                 # make selected surface: word wrap if necessary
                 # get words and split them if bigger than max_width
@@ -547,27 +547,27 @@ class Node(GraphObject):
                     line = font2.render(line, True, Palette.text)
                     surf.blit(line, (width/2 - line.get_width()/2, y*12))
 
-                self._text_surfs[1] = Node.black_back(surf)
+                self.text_surfs[1] = Node.black_back(surf)
             else:
                 # same text for both unselected and selected
                 surf = Node.black_back(font2.render(text, True, Palette.text))
-                self._text_surfs = [surf, surf]
+                self.text_surfs = [surf, surf]
 
     def set_image(self, image):
         """Sets and resizes self.surfs depending on self.size"""
-        s = self._size
+        s = self.size
         self.image = image
-        self._surfs = [None]*3
+        self.surfs = [None]*3
 
         # draw empty box
         m = int(s/10) # outline margin
         if m > 5: m = 5
 
         for i in range(3): # set normal, hovered, and selected surfaces
-            self._surfs[i] = pygame.Surface((s, s))
-            self._surfs[i].fill(Palette.box_outer[self.state][i])
-            pygame.draw.rect(self._surfs[i], Palette.box_sep[self.state][i], Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
-            pygame.draw.rect(self._surfs[i], Palette.box_inner[self.state][i], Rect(m, m, s - m*2, s - m*2))
+            self.surfs[i] = pygame.Surface((s, s))
+            self.surfs[i].fill(Palette.box_outer[self.state][i])
+            pygame.draw.rect(self.surfs[i], Palette.box_sep[self.state][i], Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
+            pygame.draw.rect(self.surfs[i], Palette.box_inner[self.state][i], Rect(m, m, s - m*2, s - m*2))
 
         # if image, resize it and add it to the surface
         if image is not None:
@@ -578,18 +578,18 @@ class Node(GraphObject):
 
             image = pygame.transform.scale(image.surf, (w, h))
             for i in range(3):
-                self._surfs[i].blit(image, (m+1, m+1))
+                self.surfs[i].blit(image, (m+1, m+1))
 
     def collide(self, pos):
         """Checks if the given position in screen coordinates intersects with the node"""
         x, y = graph.get_pos(self.x, self.y)
-        s = self._size/2
+        s = self.size/2
         return x-s < pos[0] < x+s and y-s < pos[1] < y+s
 
     def visible(self):
         """Returns True if visible, taking scroll and zoom into account, otherwise returns False"""
         x, y = graph.get_pos(self.x, self.y)
-        s = self._size/2
+        s = self.size/2
         return -s <= x < Graph.W+s and -s <= y < Graph.H+s
 
     def update(self, events, surf, project, force_text=False):
@@ -599,12 +599,12 @@ class Node(GraphObject):
 
         # use a different texture when hovered
         i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
-        surf.blit(self._surfs[i], (x - self._size/2, y - self._size/2))
+        surf.blit(self.surfs[i], (x - self.size/2, y - self.size/2))
 
         # draw text
-        if self._text_surfs is not None:
-            t = self._text_surfs[force_text or bool(i)]
-            surf.blit(t, (x - t.get_width()/2, y + self._size/2 + 5))
+        if self.text_surfs is not None:
+            t = self.text_surfs[force_text or bool(i)]
+            surf.blit(t, (x - t.get_width()/2, y + self.size/2 + 5))
 
 class Link(GraphObject):
     """Link between two nodes in the graph"""
@@ -619,7 +619,7 @@ class Link(GraphObject):
         self.n1 = n1
         self.n2 = n2 # can be None if just created
 
-        self.refresh() # set self.rank, self.size and self._state
+        self.refresh() # set self.rank, self.size and self.state
 
     @staticmethod
     def get_rank_size(rank):
@@ -632,33 +632,33 @@ class Link(GraphObject):
         if self.n2 is None: self.rank = self.n1.rank
         else: self.rank = max(self.n1.rank, self.n2.rank)
 
-        self._size = Link.get_rank_size(self.rank)
+        self.size = Link.get_rank_size(self.rank)
 
-        if self.n2 is None: self._state = self.n1.state
-        else: self._state = max(self.n1.state, self.n2.state)
+        if self.n2 is None: self.state = self.n1.state
+        else: self.state = max(self.n1.state, self.n2.state)
 
     def collide(self, mpos):
-        """Checks if the link collides with the mouse, with self._size tolerance.
+        """Checks if the link collides with the mouse, with self.size tolerance.
         How it works:
         Let p1 and p2 be the two link end points once projected into screen space, and M the mouse pos.
         Let (D) be the line between p1 and p2, and M' the approximation of M projected onto (D).
         M' is hence the point in (D) that is at the same distance from p1 as M.
 
         The goal of this method is to compute the distance (squared) between M' and M,
-        and compare it to self._size (squared). If the former is smaller, a collision is registered.
+        and compare it to self.size (squared). If the former is smaller, a collision is registered.
 
         During the calculation, we compute t, directional vector of (D). If t is not in [0, 1],
         the projected point is outside the segment of (D) that sits between p1 and p2,
         hence there is no collision in this case.
 
-        In case p1 == p2, the line formed by the link is treated as a circle of radius self._size
+        In case p1 == p2, the line formed by the link is treated as a circle of radius self.size
         for collision checks. This shouldn't usually matter as the ends of the links are nodes
         and their collision detection runs first in Graph.update.
         """
         x1, y1 = graph.get_pos(self.n1.x, self.n1.y)
         x2, y2 = graph.get_pos(self.n2.x, self.n2.y)
         xm, ym = mpos
-        s2 = self._size*self._size
+        s2 = self.size*self.size
         if x1 == x2 and y1 == y2:
             dx, dy = xm-x1, ym-y1
             return dx*dx + dy*dy <= s2
@@ -689,8 +689,8 @@ class Link(GraphObject):
 
         # get color depending on if the link is hovered/selected
         i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
-        col = Palette.link[self._state][i]
-        pygame.draw.line(surf, col, pos1, pos2, self._size)
+        col = Palette.link[self.state][i]
+        pygame.draw.line(surf, col, pos1, pos2, self.size)
 
 class Image:
     """Pygame surface loaded from image file.
@@ -793,12 +793,12 @@ class UI:
 
         # prepre text for the surface
         text = font2.render(str(step), True, Palette.text)
-        w_ = text.get_width()
+        _w = text.get_width()
 
-        self.zoom_surf = pygame.Surface((w_ + 5 + w*4, 12), SRCALPHA)
+        self.zoom_surf = pygame.Surface((_w + 5 + w*4, 12), SRCALPHA)
         for i in range(4):
             col = Palette.zoom_bar[i&1]
-            pygame.draw.rect(self.zoom_surf, col, Rect(w_ + 5 + i*w, 2, w, 8))
+            pygame.draw.rect(self.zoom_surf, col, Rect(_w + 5 + i*w, 2, w, 8))
         self.zoom_surf.blit(text, (0, 0))
 
     def update(self, zoom):
@@ -848,7 +848,7 @@ class Graph:
         self.ui = UI()
 
         # debug information
-        self._debug_surf = None
+        self.debug_surf = None
 
         self.changes = False # set to True when changed something (will trigger a popup on close)
 
@@ -882,20 +882,20 @@ class Graph:
         text = ' '.join(str(a) for a in args)
         width = len(text)*char_w
 
-        if self._debug_surf is None:
+        if self.debug_surf is None:
             # create new Surface
-            self._debug_surf = pygame.Surface((width, 16))
+            self.debug_surf = pygame.Surface((width, 16))
             y = 0
         else:
             # append text in a new line
-            w, h = self._debug_surf.get_size()
+            w, h = self.debug_surf.get_size()
             width = w if w > width else width
             surf = pygame.Surface((width, h+16))
-            surf.blit(self._debug_surf, (0, 0))
-            self._debug_surf = surf
+            surf.blit(self.debug_surf, (0, 0))
+            self.debug_surf = surf
             y = h
 
-        self._debug_surf.blit(font.render(text, True, Palette.text), (0, y))
+        self.debug_surf.blit(font.render(text, True, Palette.text), (0, y))
 
     def open(self, save_file):
         """Sets self.save_file and loads save file"""
@@ -1135,9 +1135,8 @@ class Graph:
         # get the bounding boxes
         x0 = y0 = x1 = y1 = None
         for node in Manager.nodes.values():
-            # yeah I know it's supposed to be private _ but I can't be bothered renaming it
-            w, h = node._text_surfs[1].get_size()
-            offsettop = node._size/2/Graph.unit_size
+            w, h = node.text_surfs[1].get_size()
+            offsettop = node.size/2/Graph.unit_size
             offsetx = max(offsettop, w/2/Graph.unit_size)
             offsetbtm = offsettop + (5+h)/Graph.unit_size
             if x0 is None or node.x-offsetx < x0: x0 = node.x-offsetx
@@ -1378,9 +1377,9 @@ class Graph:
         self.ui.update(change_zoom)
 
         # display debug screen if needed
-        if self._debug_surf is not None:
-            screen.blit(self._debug_surf, (0, 0))
-            self._debug_surf = None
+        if self.debug_surf is not None:
+            screen.blit(self.debug_surf, (0, 0))
+            self.debug_surf = None
 
 def set_title(name, unsaved=False):
     """Sets the title of the pygame application"""

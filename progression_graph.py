@@ -582,13 +582,13 @@ class Node(GraphObject):
 
     def collide(self, pos):
         """Checks if the given position in screen coordinates intersects with the node"""
-        x, y = graph.get_pos(self.x, self.y)
+        x, y = graph.project(self.x, self.y)
         s = self.size/2
         return x-s < pos[0] < x+s and y-s < pos[1] < y+s
 
     def visible(self):
         """Returns True if visible, taking scroll and zoom into account, otherwise returns False"""
-        x, y = graph.get_pos(self.x, self.y)
+        x, y = graph.project(self.x, self.y)
         s = self.size/2
         return -s <= x < Graph.W+s and -s <= y < Graph.H+s
 
@@ -655,8 +655,8 @@ class Link(GraphObject):
         for collision checks. This shouldn't usually matter as the ends of the links are nodes
         and their collision detection runs first in Graph.update.
         """
-        x1, y1 = graph.get_pos(self.n1.x, self.n1.y)
-        x2, y2 = graph.get_pos(self.n2.x, self.n2.y)
+        x1, y1 = graph.project(self.n1.x, self.n1.y)
+        x2, y2 = graph.project(self.n2.x, self.n2.y)
         xm, ym = mpos
         s2 = self.size*self.size
         if x1 == x2 and y1 == y2:
@@ -1168,12 +1168,12 @@ class Graph:
         screen.blit(old_screen, (0, 0))
         pygame.display.flip()
 
-    def get_pos(self, x, y):
+    def project(self, x, y):
         """Returns the position, in screen coordinates, corresponding to a position in graph coordinates"""
         z = self.zoom * Graph.unit_size
         return (x - self.scroll_x) * z + self.W/2, (y - self.scroll_y) * z + self.H/2
 
-    def from_pos(self, x, y):
+    def screen2coord(self, x, y):
         """Returns the position, in graph coordinates, corresponding to a position in screen coordinates"""
         z = self.zoom * Graph.unit_size
         return (x - self.W/2) / z + self.scroll_x, (y - self.H/2) / z + self.scroll_y
@@ -1251,8 +1251,16 @@ class Graph:
 
             # zoom
             elif event.type == MOUSEWHEEL and not pressed:
+                mx, my = self.screen2coord(*mpos)
+
                 if event.y > 0: self.zoom *= 1.2 # zoom in
                 else: self.zoom /= 1.2 # zoom out
+                if self.zoom == 0: self.zoom = 1 # reset zoom in this rare case
+
+                # keep zoom around mouse
+                dx, dy = self.scroll_x+mx, self.scroll_y+my
+                mx, my = self.screen2coord(*mpos)
+                self.scroll_x, self.scroll_y = dx-mx, dy-my
 
                 change_zoom = True
 
@@ -1283,7 +1291,7 @@ class Graph:
 
                 elif self.selection is None:
                     if event.key == K_p:
-                        self.select(Manager.new_node(*self.from_pos(*mpos), 0, 0))
+                        self.select(Manager.new_node(*self.screen2coord(*mpos), 0, 0))
                         change = True
                     elif event.key == K_s:
                         if self.save_file is None: self.saveas()
@@ -1351,7 +1359,7 @@ class Graph:
         if self.drag_start is not None:
             x, y = self.drag_start
             x0, y0 = self.drag_mouse_start
-            x1, y1 = pygame.mouse.get_pos()
+            x1, y1 = mpos
             m = 1/self.zoom/self.unit_size
             dx = (x0-x1) * m
             dy = (y0-y1) * m
@@ -1370,8 +1378,8 @@ class Graph:
         screen.fill(Palette.background)
 
         # update and render graph objects
-        for link in visible_l: link.update(events, screen, self.get_pos)
-        for node in visible_n: node.update(events, screen, self.get_pos)
+        for link in visible_l: link.update(events, screen, self.project)
+        for node in visible_n: node.update(events, screen, self.project)
 
         # update and render menu and UI
         self.ui.update(change_zoom)

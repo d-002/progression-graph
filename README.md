@@ -44,4 +44,6 @@ You can export the graphs you created with E (export without background) and F (
 - `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01
 
 ## TODO
-- Change images and sizes on zoom (not text?)
+- Selection
+- Allow empty text
+- Change images and sizes on zoom, not text?

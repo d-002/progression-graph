@@ -700,7 +700,7 @@ class Image:
         """Loads an image from the save zip file (content is a bytes array)
         or from the disk (content is None, and path is used to load the image)"""
 
-        self.path = basename(path)
+        self.path = basename(path).replace(' ', '_')
         self.name = splitext(self.path)[0]
         if content is None:
             # load image from disk
@@ -1196,7 +1196,7 @@ class Graph:
                 visible_n.append(node)
         visible_l = [] # same for links
         for link in Manager.links.values():
-            if link.n1 in visible_n or link.n2 in visible_n or link.n2 is None or True:
+            if link.n1 in visible_n or link.n2 in visible_n or link.n2 is None:
                 visible_l.append(link)
 
         self.hovered = None

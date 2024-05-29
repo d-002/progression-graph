@@ -1135,14 +1135,18 @@ class Graph:
         # get the bounding boxes
         x0 = y0 = x1 = y1 = None
         for node in Manager.nodes.values():
-            w, h = node.text_surfs[1].get_size()
+            if node.text_surfs is None: w = h = 0
+            else: w, h = node.text_surfs[1].get_size()
+
             offsettop = node.size/2/Graph.unit_size
             offsetx = max(offsettop, w/2/Graph.unit_size)
             offsetbtm = offsettop + (5+h)/Graph.unit_size
+
             if x0 is None or node.x-offsetx < x0: x0 = node.x-offsetx
             if y0 is None or node.y-offsettop < y0: y0 = node.y-offsettop
             if x1 is None or node.x+offsetx > x1: x1 = node.x+offsetx
             if y1 is None or node.y+offsetbtm > y1: y1 = node.y+offsetbtm
+
         w, h = (x1-x0)*Graph.unit_size, (y1-y0)*Graph.unit_size
 
         try:

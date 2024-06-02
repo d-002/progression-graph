@@ -112,6 +112,7 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
 
     # restore old screen state in case there are multiple popups back-to-back, darkening the screen
     screen.blit(old_screen, (0, 0))
+    pygame.event.get() # don't trigger this infinitely
 
     return cast(string)
 
@@ -183,7 +184,7 @@ def ask_filename(new=False):
 
     else: file = askopenfilename(title='Open save file', filetypes=filetype)
 
-    pygame.event.get() # don't trigger this infinitely
+    pygame.event.get()
     return file
 
 def image_selector():

@@ -38,7 +38,7 @@ def get_popup_bg(message):
     old.blit(screen, (0, 0))
     return old, background
 
-def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
+def ask_input_box(message, cast, check=lambda s: len(s), max_width=400, autofill=''):
     """Input box, freezes other actions to ask for user value.
     Param message: message to display. Can contain newlines, but may overflow onto the input
     Param cast: function used to check for input format
@@ -57,7 +57,7 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400):
     button2 = Button('Cancel', Graph.W/2 + 120, Graph.H*2/3)
 
     # loop until the user presses Enter
-    string = ''
+    string = autofill
     run = True
     while run:
         enter = False # for when to try to get out of the loop
@@ -430,7 +430,7 @@ class Manager:
     @staticmethod
     def attach_text(node_id, text):
         """Sets the text of a node"""
-        Manager.nodes[int(node_id)].set_text(None if text == '' else text)
+        Manager.nodes[int(node_id)].set_text(text.strip())
 
     @staticmethod
     def reset():
@@ -457,7 +457,7 @@ class Node(GraphObject):
         self.state = state
         self.id = id
 
-        self.text = None # text, None for no text
+        self.text = ''
         self.image = None # image, None for no image
 
         self.surf = None # should always contain the surface with the right size
@@ -512,7 +512,7 @@ class Node(GraphObject):
     def set_text(self, text):
         """Sets the node's text and updates its text Surface"""
         self.text = text
-        if text is None:
+        if text == '':
             self.text_surfs = None
         else:
             max_width = 100
@@ -782,7 +782,7 @@ class UI:
         elif type(graph.selection[0]) == Link:
             text = self.text[1]
         elif type(graph.selection[0]) == Node:
-            text = self.text[4 if graph.selection[0].image is not None else 3 if graph.selection[0].text is not None else 2]
+            text = self.text[4 if graph.selection[0].image is not None else 3 if graph.selection[0].text else 2]
 
         h = 24 + text.get_height()
         self.surf = pygame.Surface((Graph.W, h), SRCALPHA)
@@ -1085,7 +1085,7 @@ class Graph:
         # text attached to nodes
         content += ('', '# TEXT')
         for id, node in Manager.nodes.items():
-            if node.text is not None:
+            if node.text:
                 content.append('At %d %s' %(id, node.text.replace(' ', '\0')))
 
         # save into zip file
@@ -1356,8 +1356,8 @@ class Graph:
                             node.set_image(image)
                             change = True
                     elif event.key == K_t:
-                        check = lambda s: len(s) and '\n' not in s and '\r' not in s and '\t' not in s
-                        text = ask_input_box('Enter node text:', str, check, self.W-20)
+                        check = lambda s: '\n' not in s and '\r' not in s and '\t' not in s
+                        text = ask_input_box('Enter node text:', str, check, self.W-20, node.text)
                         if text is not None:
                             node.set_text(text)
                             change = True
@@ -1370,17 +1370,20 @@ class Graph:
                     elif event.key == K_DELETE:
                         if node.image is not None:
                             node.set_image(None)
-                        elif node.text is not None:
-                            node.set_text(None)
+                        elif node.text:
+                            node.set_text('')
                         else:
-                            to_delete = [] # links that connect to the deleted node
-                            for id, link in Manager.links.items():
-                                if link.n1 == node or link.n2 == node:
-                                    to_delete.append(id)
-                            del Manager.nodes[node.id]
+                            to_delete = [] # links that connect to the deleted nodes
+                            for node in self.selection:
+                                for id, link in Manager.links.items():
+                                    if link.n1 == node or link.n2 == node:
+                                        to_delete.append(id)
+                                del Manager.nodes[node.id]
                             for link in to_delete:
-                                del Manager.links[link]
-                            self.selection = []
+                                if link in Manager.links:
+                                    del Manager.links[link]
+                            # this value will be overwritten, self.selection should never be None
+                            self.selection = None
                         self.select(self.selection) # update self.ui
                         change = True
 

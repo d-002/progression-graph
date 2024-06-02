@@ -342,6 +342,9 @@ class Palette:
     # States base colors. Nodes and links colors are derived from them
     states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
 
+    selection_outline = (255, 255, 255, 100)
+    selection_fill = (255, 255, 255, 30)
+
     link = [None]*3 # contains a nested list: [[todo normal, todo hovered, todo selected], [doing], [completed]]
     # same for box colors
     box_outer = [None]*3
@@ -599,7 +602,7 @@ class Node(GraphObject):
         x, y = project(self.x, self.y)
 
         # use a different texture when hovered
-        i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
+        i = 2 if self in graph.selection else 1 if self == graph.hovered else 0
         surf.blit(self.surfs[i], (x - self.size/2, y - self.size/2))
 
         # draw text
@@ -689,7 +692,7 @@ class Link(GraphObject):
         else: pos2 = project(self.n2.x, self.n2.y)
 
         # get color depending on if the link is hovered/selected
-        i = 2 if self == graph.selection else 1 if self == graph.hovered else 0
+        i = 2 if self in graph.selection else 1 if self == graph.hovered else 0
         col = Palette.link[self.state][i]
         pygame.draw.line(surf, col, pos1, pos2, self.size)
 
@@ -774,12 +777,12 @@ class UI:
         """Updates cached Surface: redraws background, adds elements depending on selection.
         If init is True (should be set to True only on init), graph is assumed to not exist (same as when graph.selection is None)."""
 
-        if init or graph.selection is None:
+        if init or not len(graph.selection):
             text = self.text[0]
-        elif type(graph.selection) == Link:
+        elif type(graph.selection[0]) == Link:
             text = self.text[1]
-        elif type(graph.selection) == Node:
-            text = self.text[4 if graph.selection.image is not None else 3 if graph.selection.text is not None else 2]
+        elif type(graph.selection[0]) == Node:
+            text = self.text[4 if graph.selection[0].image is not None else 3 if graph.selection[0].text is not None else 2]
 
         h = 24 + text.get_height()
         self.surf = pygame.Surface((Graph.W, h), SRCALPHA)
@@ -842,7 +845,8 @@ class Graph:
         self.drag_start = None # moved/scroll element pos when drag started
         self.drag_mouse_start = None # mouse pos when drag started
 
-        self.selection = None # selected Graph object, or None if no selection
+        self.selection = [] # self.selection contains the list of selected objects
+        self.selection_box = None # contains start position when selecting, otherwise None
         self.hovered = None # hovered Graph object
         self.link = None # if link in construction, store it here, else None
 
@@ -1029,7 +1033,7 @@ class Graph:
         # reset variables
         self.drag_start = None
         self.drag_mouse_start = None
-        self.selection = None
+        self.selection = []
         self.hovered = None
         self.hovered_l = None
         self.link = None
@@ -1185,7 +1189,7 @@ class Graph:
 
     def select(self, obj):
         """Sets self.selection to obj and updates self.ui"""
-        self.selection = obj
+        self.selection = [] if obj is None else [obj]
         self.ui.update_surf()
 
     def update(self, events):
@@ -1222,37 +1226,61 @@ class Graph:
         for event in events:
             # start dragging
             if event.type == MOUSEBUTTONDOWN and event.button == 1:
-                self.select(self.hovered)
+                # don't drag and select objects at the same time
+                if self.selection_box is not None: continue
 
-                if self.selection is None:
+                # keep the selection when dragging an object,
+                # unless something not in the selection was selected
+                if self.hovered not in self.selection: self.select(self.hovered)
+
+                if not len(self.selection):
                     self.drag_start = (self.scroll_x, self.scroll_y)
-                elif type(self.selection) == Node:
-                    self.drag_start = (self.selection.x, self.selection.y)
-                if type(self.selection) != Link:
+                elif type(self.selection[0]) == Node:
+                    self.drag_start = (self.selection[0].x, self.selection[0].y)
+
+                if not len(self.selection) or type(self.selection[0]) == Node:
                     self.drag_mouse_start = event.pos
 
                 # finish adding a link
-                if type(self.selection) == Node and self.link is not None and self.link.n1 != self.selection:
+                if len(self.selection) and type(self.selection[0]) == Node and self.link is not None and self.link.n1 != self.selection[0]:
                     # check if no link exists between these two nodes
                     ok = True
                     for link in Manager.links.values():
-                        if (link.n1 == self.link.n1 and link.n2 == self.selection) or \
-                            (link.n2 == self.link.n1 and link.n1 == self.selection):
+                        if (link.n1 == self.link.n1 and link.n2 == self.selection[0]) or \
+                            (link.n2 == self.link.n1 and link.n1 == self.selection[0]):
                             ok = False
                             break
 
                     if ok:
-                        self.link.n2 = self.selection
+                        self.link.n2 = self.selection[0]
                         self.link.refresh()
                         self.link = None
                         self.select(None)
                         self.drag_start = None # prevent unwanted drag
                         change = True
 
+            # start selection box
+            elif event.type == MOUSEBUTTONDOWN and event.button == 3:
+                if self.drag_start is not None: continue
+
+                self.selection_box = event.pos
+
             # stop dragging
             elif event.type == MOUSEBUTTONUP and event.button == 1:
                 self.drag_start = None
                 self.drag_mouse_start = None
+
+            elif event.type == MOUSEBUTTONUP and event.button == 3:
+                x0, y0 = self.selection_box
+                x1, y1 = event.pos
+                if x1 < x0: x0, x1 = x1, x0
+                if y1 < y0: y0, y1 = y1, y0
+                self.selection_box = None
+                self.selection = []
+                for node in Manager.nodes.values():
+                    x, y = self.project(node.x, node.y)
+                    if x0 <= x <= x1 and y0 <= y <= y1:
+                        self.selection.append(node)
 
             # zoom
             elif event.type == MOUSEWHEEL and not pressed:
@@ -1294,7 +1322,7 @@ class Graph:
                 elif event.key == K_RETURN and self.link is None:
                     self.select(None)
 
-                elif self.selection is None:
+                elif not len(self.selection):
                     if event.key == K_p:
                         self.select(Manager.new_node(*self.screen2coord(*mpos), 0, 0))
                         change = True
@@ -1317,47 +1345,48 @@ class Graph:
                     elif event.key == K_f:
                         self.export(False)
 
-                elif type(self.selection) == Node:
+                elif type(self.selection[0]) == Node:
+                    node = self.selection[0]
                     if event.key == K_l and self.link is None:
-                        self.link = Manager.new_link(self.selection.id, None)
+                        self.link = Manager.new_link(node.id, None)
                         self.select(None)
                     elif event.key == K_i:
                         image = image_selector()
                         if image is not None:
-                            self.selection.set_image(image)
+                            node.set_image(image)
                             change = True
                     elif event.key == K_t:
                         check = lambda s: len(s) and '\n' not in s and '\r' not in s and '\t' not in s
                         text = ask_input_box('Enter node text:', str, check, self.W-20)
                         if text is not None:
-                            self.selection.set_text(text)
+                            node.set_text(text)
                             change = True
                     elif event.key == K_r:
-                        self.selection.cycle_rank()
+                        node.cycle_rank()
                         change = True
                     elif event.key == K_s:
-                        self.selection.cycle_state()
+                        node.cycle_state()
                         change = True
                     elif event.key == K_DELETE:
-                        if self.selection.image is not None:
-                            self.selection.set_image(None)
-                        elif self.selection.text is not None:
-                            self.selection.set_text(None)
+                        if node.image is not None:
+                            node.set_image(None)
+                        elif node.text is not None:
+                            node.set_text(None)
                         else:
                             to_delete = [] # links that connect to the deleted node
                             for id, link in Manager.links.items():
-                                if link.n1 == self.selection or link.n2 == self.selection:
+                                if link.n1 == node or link.n2 == node:
                                     to_delete.append(id)
-                            del Manager.nodes[self.selection.id]
+                            del Manager.nodes[node.id]
                             for link in to_delete:
                                 del Manager.links[link]
-                            self.selection = None
+                            self.selection = []
                         self.select(self.selection) # update self.ui
                         change = True
 
-                elif type(self.selection) == Link:
+                elif type(self.selection[0]) == Link:
                     if event.key == K_DELETE:
-                        del Manager.links[self.selection.id]
+                        del Manager.links[self.selection[0].id]
                         self.select(None)
                         change = True
 
@@ -1368,12 +1397,13 @@ class Graph:
             m = 1/self.zoom/self.unit_size
             dx = (x0-x1) * m
             dy = (y0-y1) * m
-            if self.selection is None:
+            if len(self.selection):
+                for obj in reversed(self.selection):
+                    obj.x = x + obj.x - self.selection[0].x - dx
+                    obj.y = y + obj.y - self.selection[0].y - dy
+            else:
                 self.scroll_x = x + dx
                 self.scroll_y = y + dy
-            else:
-                self.selection.x = x - dx
-                self.selection.y = y - dy
                 change = bool(dx or dy)
 
         if change:
@@ -1388,6 +1418,19 @@ class Graph:
 
         # update and render menu and UI
         self.ui.update(change_zoom)
+
+        # display selection box if needed
+        if self.selection_box is not None:
+            x0, y0 = self.selection_box
+            x1, y1 = mpos
+            if x1 < x0: x0, x1 = x1, x0
+            if y1 < y0: y0, y1 = y1, y0
+            dx, dy = x1-x0, y1-y0
+            surf = pygame.Surface((dx, dy), SRCALPHA)
+            surf.fill(Palette.selection_outline)
+            pygame.draw.rect(surf, Palette.selection_fill, Rect(1, 1, dx-2, dy-2))
+
+            screen.blit(surf, (x0, y0))
 
         # display debug screen if needed
         if self.debug_surf is not None:

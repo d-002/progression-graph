@@ -21,6 +21,8 @@ Progression graph tool for games
 ## Controls
 Click on an object to select it, hit Escape to unselect it. Escape can also be used to cancel creating a link.
 
+Click and hold right click to select multiple nodes
+
 When a node is selected, press S to cycle its state, R to cycle its rank, or create a link with L and click another node to connect them.
 
 Options will appear on top of the screen dependoing on the selection. Hit the corresponding keys to execute the different actions.
@@ -44,6 +46,5 @@ You can export the graphs you created with E (export without background) and F (
 - `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01
 
 ## TODO
-- Selection
 - Allow empty text
 - Change images and sizes on zoom, not text?

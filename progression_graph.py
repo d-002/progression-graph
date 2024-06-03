@@ -340,12 +340,16 @@ class Palette:
     zoom_bar = ((200, 200, 200), (170, 170, 170))
 
     # States base colors. Nodes and links colors are derived from them
-    states = ((255, 0, 0), (127, 127, 0), (0, 255, 0))
+    states = ((255, 0, 0), (255, 127, 0), (0, 255, 0))
 
     selection_outline = (255, 255, 255, 100)
     selection_fill = (255, 255, 255, 30)
 
-    link = [None]*3 # contains a nested list: [[todo normal, todo hovered, todo selected], [doing], [completed]]
+    # contains a nested list: [[todo normal, todo hovered, todo selected], [doing], [completed]]
+    link = [None]*3
+    # same but darker for the center
+    link2 = [None]*3
+
     # same for box colors
     box_outer = [None]*3
     box_sep = [None]*3
@@ -360,11 +364,12 @@ class Palette:
         for i, col in enumerate(Palette.states):
             # init link colors
             Palette.link[i] = (col, Palette.mult(col, 0.6, 127), Palette.mult(col, 0.3, 192))
+            Palette.link2[i] = tuple(Palette.mult(c, 0.9) for c in Palette.link[i])
 
             # init node colors
-            Palette.box_outer[i] = (Palette.mult(col, 0.4, 50), Palette.mult(col, 0.4, 60), Palette.mult(col, 0.4, 80))
-            Palette.box_sep[i] = (Palette.mult(col, 0.2, 0), Palette.mult(col, 0.2, 20), Palette.mult(col, 0.2, 40))
-            Palette.box_inner[i] = (Palette.mult(col, 0.3, 100), Palette.mult(col, 0.3, 120), Palette.mult(col, 0.3, 150))
+            Palette.box_outer[i] = (Palette.mult(col, 0.5, 60), Palette.mult(col, 0.5, 80), Palette.mult(col, 0.5, 100))
+            Palette.box_sep[i] = (Palette.mult(col, 0.7, 100), Palette.mult(col, 0.7, 120), Palette.mult(col, 0.7, 140))
+            Palette.box_inner[i] = (Palette.mult(col, 0.5, 50), Palette.mult(col, 0.5, 70), Palette.mult(col, 0.5, 90))
 
     @staticmethod
     def mult(col, x, add=0):
@@ -570,12 +575,11 @@ class Node(GraphObject):
 
         # draw empty box
         m = int(s/10) # outline margin
-        if m > 5: m = 5
 
         for i in range(3): # set normal, hovered, and selected surfaces
             self.surfs[i] = pygame.Surface((s, s))
             self.surfs[i].fill(Palette.box_outer[self.state][i])
-            pygame.draw.rect(self.surfs[i], Palette.box_sep[self.state][i], Rect(m-1, m-1, s - m*2 + 2, s - m*2 + 2))
+            pygame.draw.rect(self.surfs[i], Palette.box_sep[self.state][i], Rect(m-2, m-2, s - m*2 + 4, s - m*2 + 4))
             pygame.draw.rect(self.surfs[i], Palette.box_inner[self.state][i], Rect(m, m, s - m*2, s - m*2))
 
         # if image, resize it and add it to the surface
@@ -705,7 +709,13 @@ class Link(GraphObject):
         # get color depending on if the link is hovered/selected
         i = 2 if self in graph.selection else 1 if self == graph.hovered else 0
         col = Palette.link[self.state][i]
-        pygame.draw.line(surf, col, pos1, pos2, self.size)
+        col2 = Palette.link2[self.state][i]
+
+        # get the actually displayed size and decide if need to draw a center line
+        s = self.size if graph.zoom > 1 else self.size*graph.zoom
+
+        pygame.draw.line(surf, col, pos1, pos2, 1 if s < 1 else int(s))
+        if s >= 3: pygame.draw.line(surf, col2, pos1, pos2, int(s/3))
 
 class Image:
     """Pygame surface loaded from image file.

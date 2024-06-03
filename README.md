@@ -1,16 +1,22 @@
-# progression-graph
-Progression graph tool for games
+<div align=center>
+  <h1>progression-graph</h1>
+  <p>Progression graph tool for games</p>
+  <br />
+</div>
 
-## Screenshots
-![](https://github.com/d-002/progression-graph/assets/69427207/ba704b64-ad56-4a3e-90d5-f2dc26d2c171)
-![](https://github.com/d-002/progression-graph/assets/69427207/2c4a48c5-ea13-4f6f-9a83-974eb9726fbf)
-![](https://github.com/d-002/progression-graph/assets/69427207/19dc0699-c994-44f0-90d1-7bf9309813e6)
+## Web app [upcoming]
 
-## Requirements
+A web app is upcoming, and will likely become the primary focus regarding updates
+
+## Python application
+
+**Requirements**
 - python>=3.10
 - pygame>=2.3.0
 
-## Features
+---
+
+<div align=center><h2><br />Features</h2></div>
 - Create nodes, add text and images to them, drag them around. The text is displayed on hover for lower ranked (sized) nodes, and always for higher ranks.
 - Link these nodes, links have different sizes depending on the max rank of the connected nodes
 - Nodes can have different ranks, determining their size
@@ -18,7 +24,7 @@ Progression graph tool for games
 - Visualize the tree, export into png file
 - Nodes have a state: to do, doing, completed, with different colors. You can cycle them while selected, and their state updates the connected links.
 
-## Controls
+<div align=center><h2>Controls</h2></div>
 Click on an object to select it, hit Escape to unselect it. Escape can also be used to cancel creating a link.
 
 Click and hold right click to select multiple nodes
@@ -35,7 +41,7 @@ You can also remove the text or the image from a point by adding an empty text o
 
 You can export the graphs you created with E (export without background) and F (filled background), and quit with Q or the regular window means.
 
-## Save files format
+<div align=center><h2>Save files format</h2></div>
 - `P x y r s id`: creates a new point at coordinates (x, y), of rank r, states and with ID *id*
 - `L n1 n2 id`: creates a new link with ID *id*, attached to nodes of IDs *n1* and *n2*. These nodes should have been created before.
 - `I name id`: loads an image from the images in the zip file into image object with ID *id*
@@ -45,5 +51,16 @@ You can export the graphs you created with E (export without background) and F (
 - `_S x y`: puts the camera at position (x, y) in the unit coordinate system
 - `_Z z`: sets the zoom to z, values less than 0.01 are set back to 0.01
 
+<div align=center>
+  <h2>Screenshots</h2>
+
+  <img width=49% src="https://github.com/d-002/progression-graph/assets/69427207/2c4a48c5-ea13-4f6f-9a83-974eb9726fbf">
+  <img width=49% src="https://github.com/d-002/progression-graph/assets/69427207/19dc0699-c994-44f0-90d1-7bf9309813e6">
+  <br />
+  <img width=70% src="https://github.com/d-002/progression-graph/assets/69427207/ba704b64-ad56-4a3e-90d5-f2dc26d2c171">
+</div>
+
+<!--
 ## TODO
 - Change images and sizes on zoom, not text?
+-->

@@ -460,7 +460,10 @@ class Node(GraphObject):
         self.text = ''
         self.image = None # image, None for no image
 
-        self.surf = None # should always contain the surface with the right size
+        # on init and when changing zoom, cache the scaled surfaces
+        self.cached_surfs = None
+        self.cached_zoom = None
+
         # rendered pygame fonts, None for no text
         # if text, will contain [shortened text, full text (on hover/selection)]
         self.text_surfs = None
@@ -561,6 +564,8 @@ class Node(GraphObject):
         """Sets and resizes self.surfs depending on self.size"""
         s = self.size
         self.image = image
+        self.cached_surfs = None # force cached surfaces refresh
+        self.cached_zoom = None
         self.surfs = [None]*3
 
         # draw empty box
@@ -601,14 +606,20 @@ class Node(GraphObject):
         The text is cut when not hovered/selected, but this can be overriden by setting force_text to True"""
         x, y = project(self.x, self.y)
 
+        s = self.size if graph.zoom > 1 else self.size*graph.zoom
+
+        # refresh cached surfaces if needed
+        if self.cached_zoom != graph.zoom:
+            self.cached_surfs = [pygame.transform.smoothscale(surf, (s, s)) for surf in self.surfs]
+
         # use a different texture when hovered
         i = 2 if self in graph.selection else 1 if self == graph.hovered else 0
-        surf.blit(self.surfs[i], (x - self.size/2, y - self.size/2))
+        surf.blit(self.cached_surfs[i], (x - s/2, y - s/2))
 
         # draw text
         if self.text_surfs is not None:
             t = self.text_surfs[force_text or bool(i)]
-            surf.blit(t, (x - t.get_width()/2, y + self.size/2 + 5))
+            surf.blit(t, (x - t.get_width()/2, y + s/2 + 5))
 
 class Link(GraphObject):
     """Link between two nodes in the graph"""

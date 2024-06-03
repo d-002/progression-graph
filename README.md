@@ -62,5 +62,5 @@ You can export the graphs you created with E (export without background) and F (
 
 <!--
 ## TODO
-- Change images and sizes on zoom, not text?
+- Better lines visuals
 -->

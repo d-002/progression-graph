@@ -1405,8 +1405,8 @@ class Graph:
                                 if link in Manager.links:
                                     del Manager.links[link]
                             # this value will be overwritten, self.selection should never be None
-                            self.selection = None
-                        self.select(self.selection) # update self.ui
+                            self.selection = [None]
+                        self.select(self.selection[0]) # update self.ui
                         change = True
 
                 elif type(self.selection[0]) == Link:

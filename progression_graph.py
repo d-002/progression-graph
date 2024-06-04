@@ -62,6 +62,8 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400, autofill
     while run:
         enter = False # for when to try to get out of the loop
         events = pygame.event.get()
+        # prevent multiple key presses when changing window focus
+        pygame.event.clear()
         for event in events:
             if event.type == QUIT:
                 pygame.event.post(pygame.event.Event(QUIT))
@@ -112,7 +114,6 @@ def ask_input_box(message, cast, check=lambda s: len(s), max_width=400, autofill
 
     # restore old screen state in case there are multiple popups back-to-back, darkening the screen
     screen.blit(old_screen, (0, 0))
-    pygame.event.get() # don't trigger this infinitely
 
     return cast(string)
 
@@ -135,6 +136,7 @@ def ask_button(message, buttons):
     res = None # returned result
     while run:
         events = pygame.event.get()
+        pygame.event.clear()
         for event in events:
             if event.type == QUIT:
                 run = False
@@ -184,7 +186,6 @@ def ask_filename(new=False):
 
     else: file = askopenfilename(title='Open save file', filetypes=filetype)
 
-    pygame.event.get()
     return file
 
 def image_selector():
@@ -213,6 +214,7 @@ def image_selector():
     selection = None
     while run:
         events = pygame.event.get()
+        pygame.event.clear()
         for event in events:
             if event.type == QUIT:
                 run = False
@@ -1148,7 +1150,6 @@ class Graph:
         if self.save_file is None: file = None
         else: file = splitext(basename(self.save_file))[0]+'.png'
         file = asksaveasfilename(title='Export to file', filetypes=(('PNG files', '.png'),), initialfile=file)
-        pygame.event.get()
         if not file: return
         if not file.endswith('.png'): file += '.png'
         self.select(None)
@@ -1513,8 +1514,9 @@ while run:
     active = hwnd == win32gui.GetForegroundWindow() and pygame.mouse.get_focused()
     FPS = _FPS if active else _FPS/10
 
-    # handle pygame event loop
+    # pygame event loop
     events = pygame.event.get()
+    pygame.event.clear()
     for event in events:
         if event.type == QUIT:
             quit_app()

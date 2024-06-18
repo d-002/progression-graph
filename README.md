@@ -59,3 +59,8 @@ You can export the graphs you created with E (export without background) and F (
   <br />
   <img width=70% src="https://github.com/d-002/progression-graph/assets/69427207/ba704b64-ad56-4a3e-90d5-f2dc26d2c171">
 </div>
+
+<!--
+Bug export resize points
+Bug duplicate images in zip file
+-->

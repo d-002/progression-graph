@@ -63,4 +63,7 @@ You can export the graphs you created with E (export without background) and F (
 <!--
 Bug export resize points
 Bug duplicate images in zip file
+Bug keeping click when exiting popup
+Bug lines modulo across the screen
+Better changes detection
 -->
